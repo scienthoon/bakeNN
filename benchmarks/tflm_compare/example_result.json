@@ -1,0 +1,198 @@
+{
+  "benchmark_id": "p0-template-unmeasured",
+  "compiler": {
+    "flags": [
+      "-O3",
+      "-ffunction-sections",
+      "-fdata-sections",
+      "-Wl,--gc-sections"
+    ],
+    "linker_script": "replace-with-target-linker-script-and-sha256",
+    "name": "replace-with-cross-compiler",
+    "version": "unmeasured: record the complete compiler --version output"
+  },
+  "implementations": {
+    "bakenn": {
+      "metrics": {
+        "elf_flash_data_load_bytes": {
+          "reason": "Template only; no target ELF has been linked.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "elf_flash_rodata_bytes": {
+          "reason": "Template only; no target ELF has been linked.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "elf_flash_text_bytes": {
+          "reason": "Template only; no target ELF has been linked.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "elf_flash_total_bytes": {
+          "reason": "Template only; no target ELF has been linked.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "inference_median_cycles": {
+          "reason": "Template only; no physical-target cycle measurements exist.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "inference_p95_cycles": {
+          "reason": "Template only; no physical-target cycle measurements exist.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "init_cycles": {
+          "reason": "Template only; no physical-target cycle measurements exist.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "output_compared_bytes": {
+          "reason": "Template only; no shared quantized input corpus has been executed.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "output_max_abs_error_lsb": {
+          "reason": "Template only; no shared quantized input corpus has been executed.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "output_mismatched_bytes": {
+          "reason": "Template only; no shared quantized input corpus has been executed.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "peak_sram_arena_bytes": {
+          "reason": "Template only; generated-plan estimates are not substituted for target measurements.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "peak_sram_runtime_metadata_bytes": {
+          "reason": "Template only; no target map/instrumentation result exists.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "peak_sram_stack_bytes": {
+          "reason": "Template only; stack high-water mark has not been measured.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "peak_sram_static_data_bytes": {
+          "reason": "Template only; no target map/instrumentation result exists.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "peak_sram_total_bytes": {
+          "reason": "Template only; no target memory measurement exists.",
+          "status": "unmeasured",
+          "value": null
+        }
+      },
+      "source_revision": "replace-with-bakenn-git-commit",
+      "version": "replace-with-bakenn-version"
+    },
+    "tflm": {
+      "metrics": {
+        "elf_flash_data_load_bytes": {
+          "reason": "Template only; TFLM is not installed or linked by this repository.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "elf_flash_rodata_bytes": {
+          "reason": "Template only; TFLM is not installed or linked by this repository.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "elf_flash_text_bytes": {
+          "reason": "Template only; TFLM is not installed or linked by this repository.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "elf_flash_total_bytes": {
+          "reason": "Template only; TFLM is not installed or linked by this repository.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "inference_median_cycles": {
+          "reason": "Template only; no physical-target cycle measurements exist.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "inference_p95_cycles": {
+          "reason": "Template only; no physical-target cycle measurements exist.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "init_cycles": {
+          "reason": "Template only; no physical-target cycle measurements exist.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "output_compared_bytes": {
+          "reason": "Template only; no shared quantized input corpus has been executed.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "output_max_abs_error_lsb": {
+          "reason": "Template only; no shared quantized input corpus has been executed.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "output_mismatched_bytes": {
+          "reason": "Template only; no shared quantized input corpus has been executed.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "peak_sram_arena_bytes": {
+          "reason": "Template only; TFLM tensor arena was not measured.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "peak_sram_runtime_metadata_bytes": {
+          "reason": "Template only; MicroInterpreter and persistent metadata were not measured.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "peak_sram_stack_bytes": {
+          "reason": "Template only; stack high-water mark has not been measured.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "peak_sram_static_data_bytes": {
+          "reason": "Template only; no target map/instrumentation result exists.",
+          "status": "unmeasured",
+          "value": null
+        },
+        "peak_sram_total_bytes": {
+          "reason": "Template only; no target memory measurement exists.",
+          "status": "unmeasured",
+          "value": null
+        }
+      },
+      "source_revision": "replace-with-tflite-micro-git-commit",
+      "version": "replace-with-tflm-version-or-commit"
+    }
+  },
+  "model": {
+    "artifact_sha256": "replace-with-shared-quantized-model-sha256",
+    "input_sha256": "replace-with-shared-quantized-input-corpus-sha256",
+    "name": "replace-with-model-name"
+  },
+  "protocol": {
+    "cycle_counter": "replace-with-counter-and-wrap-handling",
+    "input_count": 1,
+    "interrupt_policy": "replace-with-enabled-or-disabled-and-rationale",
+    "measured_runs": 1000,
+    "warmup_runs": 50
+  },
+  "schema_version": 1,
+  "target": {
+    "architecture": "replace-with-ISA-and-enabled-extensions",
+    "board": "replace-with-board-and-revision",
+    "clock_hz": 1,
+    "mcu": "replace-with-exact-part-number"
+  },
+  "timestamp_utc": "UNMEASURED_TEMPLATE"
+}

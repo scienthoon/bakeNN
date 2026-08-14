@@ -1,0 +1,85 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install ".[test]"
+      - run: python -m pytest -q
+        env:
+          CC: ${{ matrix.cc }}
+          BAKENN_REQUIRE_CC: "1"
+      - run: python -m pip wheel . --no-deps -w wheelhouse
+
+  torch-frontend-and-wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install ".[test,torch]"
+      - run: python -m pytest -q tests/p0/test_torch_capture.py tests/p0/test_ptq_graph.py tests/p0/test_torch_models_c.py
+        env:
+          CC: gcc
+          BAKENN_REQUIRE_CC: "1"
+      - run: python -m pip wheel . --no-deps -w wheelhouse
+      - run: python -m venv --system-site-packages /tmp/bakenn-wheel-venv
+      - run: /tmp/bakenn-wheel-venv/bin/python -m pip install --no-deps wheelhouse/*.whl
+      - run: /tmp/bakenn-wheel-venv/bin/python -c "import bakenn; assert 'site-packages' in bakenn.__file__; print(bakenn.__file__)"
+        working-directory: /tmp
+      - run: /tmp/bakenn-wheel-venv/bin/python -m pytest -q ${{ github.workspace }}/tests/p0/test_torch_models_c.py
+        working-directory: /tmp
+
+  freestanding-cross-toolchains:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update
+      - run: >-
+          sudo apt-get install -y --no-install-recommends
+          gcc-arm-none-eabi binutils-arm-none-eabi
+          gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
+      - run: python -m pip install ".[test]"
+      - run: python -m pytest -q tests/targets/test_targets.py
+        env:
+          BAKENN_REQUIRE_ARM_CC: "1"
+          BAKENN_REQUIRE_RISCV_CC: "1"
+
+  esp-idf-build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:release-v5.5
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [esp32, esp32s3, esp32c3]
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -m pip install .
+      - run: >-
+          python examples/targets/generate_smoke.py
+          --target ${{ matrix.target }}
+          --output /tmp/bakenn-${{ matrix.target }}
+          --esp-idf
+      - run: idf.py set-target ${{ matrix.target }}
+        working-directory: /tmp/bakenn-${{ matrix.target }}/esp_idf
+      - run: idf.py build
+        working-directory: /tmp/bakenn-${{ matrix.target }}/esp_idf
+      - run: idf.py size-components
+        working-directory: /tmp/bakenn-${{ matrix.target }}/esp_idf

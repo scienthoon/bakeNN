@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bakenn"
+dynamic = ["version"]
+description = "Static INT8 AOT compiler for fixed-shape microcontroller models"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+torch = ["torch>=2.3"]
+test = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "bakenn._version.VERSION" }
