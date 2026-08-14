@@ -18,11 +18,15 @@ Cortex-M4 target; they are not a claim that every BakeNN model or every MCU is
 faster than TFLM. See the [physical FC result](benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md)
 and the [benchmark protocol](benchmarks/tflm_compare/README.md).
 
-### First physical evidence
+## Measured against TFLite Micro on nRF52840
+
+In this document, the MCU comparison target is TensorFlow Lite for
+Microcontrollers (TFLM), not the mobile/Linux LiteRT runtime.
 
 The following measurements are from the same frozen `32 -> 16 -> 4` INT8
 fully-connected workload on an IoT-LAB nRF52840DK (Cortex-M4, 64 MHz). They
-are evidence for this workload only, not a universal model or MCU ranking.
+use identical qparams, weights, biases, input bytes and output semantics. All
+four builds produced the same output bytes and FNV-1a checksum.
 
 | Build | Median cycles | Flash (text+data) | SRAM (data+bss) |
 |---|---:|---:|---:|
@@ -31,9 +35,60 @@ are evidence for this workload only, not a universal model or MCU ranking.
 | BakeNN portable FC | 8,706 | 20,764 B | 8,540 B |
 | TFLM reference FC | 9,342 | 63,176 B | 11,008 B |
 
-The [standalone Conv2D report](benchmarks/tflm_compare/results/iotlab_447609_conv.md)
-uses BakeNN's portable kernel versus TFLM reference and is not a CMSIS-NN
-convolution comparison.
+For this matched FC workload, BakeNN's direct CMSIS-NN path used **30.1% fewer
+cycles**, **70.0% less linked Flash**, and **22.6% less linked static SRAM**
+than TFLM with the same CMSIS-NN FC kernel family. Its model arena was 16 B;
+TFLM reserved 1,024 B and reported 580 B used.
+
+A separate static `1x4x4x1 -> 1x4x4x2` Conv2D measurement used BakeNN portable
+C versus the TFLM reference kernel:
+
+| Build | Median cycles | Flash (text+data) | SRAM (data+bss) | Arena |
+|---|---:|---:|---:|---:|
+| BakeNN portable Conv2D | 24,610 | 20,332 B | 8,160 B | 0 B |
+| TFLM reference Conv2D | 27,441 | 61,760 B | 10,624 B | 2,048 B reserved |
+
+That Conv2D run used **10.3% fewer cycles**, **67.1% less linked Flash**, and
+**23.2% less linked static SRAM**. It is not a CMSIS-NN convolution comparison;
+see the [full FC report](benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md)
+and [standalone Conv2D report](benchmarks/tflm_compare/results/iotlab_447609_conv.md)
+for the exact toolchain, protocol, hashes and limitations. These measurements
+are evidence for the frozen workloads on this board, not a universal ranking.
+
+## Why BakeNN can be better for fixed-model firmware
+
+TFLM stores a quantized graph in a FlatBuffer and executes it through a
+MicroInterpreter, an operator resolver, runtime tensor metadata and a tensor
+arena. BakeNN resolves the graph, tensor lifetimes, qparams, fixed-point
+parameters, kernel choices and memory offsets on the host, then emits a direct
+model-specific C call graph.
+
+For products where the MCU and model are fixed and firmware is rebuilt when
+the model changes, this provides concrete advantages:
+
+- **No model interpreter or FlatBuffer parser in firmware.** The output is a
+  standalone C11 library containing the model and only its selected kernels.
+- **Model-specialized optimization.** Shapes, padding, channels, multipliers,
+  buffer addresses and execution order are compile-time constants, enabling
+  fusion, liveness-based buffer reuse, packed weights and narrow 1x1, 3x3,
+  depthwise and Linear kernels.
+- **Compile-time resource enforcement.** Constant bytes, activation arena,
+  scratch and alignment are known before flashing; Flash/SRAM budgets can fail
+  compilation and CI instead of being discovered on the board.
+- **Direct vendor-kernel calls.** A supported layer can call CMSIS-NN directly
+  without retaining TFLM around that kernel. The current direct CMSIS-NN
+  adapter covers FullyConnected on ARMv7E-M DSP targets.
+- **Inspectable deployment artifacts.** The generated C function order,
+  weights, static offsets, kernel IDs, qparams and manifest can be audited
+  without reconstructing behavior across a FlatBuffer and interpreter.
+- **Deterministic failure.** Unsupported operators, unsafe accumulator bounds,
+  incompatible qparams and memory-budget violations fail during host
+  compilation; there is no target-side floating-point fallback.
+
+The tradeoff is deliberate: BakeNN currently targets static batch-one,
+fixed-shape models and supports a narrower operator surface. TFLM has broader
+operator coverage and is preferable when one firmware runtime must accept
+different model files without recompilation.
 
 ```text
 PyTorch FP32 eval model + calibration samples
