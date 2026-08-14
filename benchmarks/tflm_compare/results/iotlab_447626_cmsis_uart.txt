@@ -1,0 +1,15 @@
+Experiment 447626, nrf52840dk-1.saclay.iot-lab.info
+
+CMSIS-NN image:
+TFLM_BACKEND=CMSIS_NN
+TFLM target=nrf52840dk runs=101 first_cycles=5634 median_cycles=5499 p95_cycles=5499 tensor_arena_bytes=1024 tensor_arena_used_bytes=580 stack_unused_bytes=3400 stack_status=0
+TFLM_OUTPUT_FNV1A=0x89a44813 first -8 10 -16 4
+
+Reference image on the same node:
+TFLM_BACKEND=REFERENCE
+TFLM target=nrf52840dk runs=101 first_cycles=9519 median_cycles=9431 p95_cycles=9431 tensor_arena_bytes=1024 tensor_arena_used_bytes=564 stack_unused_bytes=3496 stack_status=0
+TFLM_OUTPUT_FNV1A=0x89a44813 first -8 10 -16 4
+
+BakeNN image on the same node:
+BAKENN target=nrf52840dk board=nrf52840dk_nrf52840 runs=101 first_cycles=8710 median_cycles=8508 p95_cycles=8508 arena_bytes=16 stack_unused_bytes=3844 stack_status=0
+BAKENN_OUTPUT -8 10 -15 3

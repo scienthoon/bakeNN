@@ -33,6 +33,7 @@ class CBackendOptions:
 
     kernel_policy: KernelPolicy = KernelPolicy.PORTABLE
     enable_weight_packing: bool = True
+    enable_cmsis_nn: bool = False
     target: TargetDescriptor = PORTABLE_32
 
     def __post_init__(self) -> None:
@@ -40,6 +41,8 @@ class CBackendOptions:
             raise ValueError("kernel_policy must use KernelPolicy")
         if not isinstance(self.enable_weight_packing, bool):
             raise ValueError("enable_weight_packing must be boolean")
+        if not isinstance(self.enable_cmsis_nn, bool):
+            raise ValueError("enable_cmsis_nn must be boolean")
         if not isinstance(self.target, TargetDescriptor):
             raise ValueError("target must be a TargetDescriptor")
 

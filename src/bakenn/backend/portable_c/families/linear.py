@@ -27,6 +27,7 @@ _PORTABLE_ID = "portable.linear_s8.v1"
 _OPTIMIZED_ID = "optimized.linear_oi2.v1"
 _TAIL_ID = "optimized.linear_oi2_tail.v1"
 _CORTEX_M4_ID = "cortex_m4.linear_smlad.v1"
+_CMSIS_NN_ID = "cmsis_nn.linear_s8.v4.0.0"
 _MIN_OPTIMIZED_MACS = 48
 
 
@@ -215,6 +216,59 @@ def _cortex_m4_kernel(context: StepEmitContext) -> KernelEmission:
     )
 
 
+def _cmsis_nn_kernel(context: StepEmitContext) -> KernelEmission:
+    """Call the pinned CMSIS-NN v4 fully-connected implementation directly."""
+
+    kernel_fn = f"{context.symbol}_linear_cmsis_nn_s8"
+    signature = f"""void {kernel_fn}(
+    const int8_t *input,
+    const int8_t *weight,
+    const int32_t *bias,
+    int8_t *output,
+    int32_t input_count,
+    int32_t output_count,
+    int32_t input_zero_point,
+    int32_t output_zero_point,
+    int32_t output_multiplier,
+    int32_t output_shift,
+    int32_t activation_min,
+    int32_t activation_max)"""
+    return KernelEmission(
+        key="cmsis_nn_linear_s8_v4_0_0",
+        header_includes=("<stddef.h>", "<stdint.h>", '"arm_nnfunctions.h"'),
+        declaration=signature + ";",
+        definition=f"""{signature} {{
+    const cmsis_nn_context context = {{ .buf = NULL, .size = 0 }};
+    const cmsis_nn_fc_params parameters = {{
+        .input_offset = -input_zero_point,
+        .filter_offset = 0,
+        .output_offset = output_zero_point,
+        .activation = {{ .min = activation_min, .max = activation_max }},
+    }};
+    const cmsis_nn_per_tensor_quant_params quantization = {{
+        .multiplier = output_multiplier,
+        .shift = output_shift,
+    }};
+    const cmsis_nn_dims input_dimensions = {{ .n = 1, .h = 1, .w = 1, .c = input_count }};
+    const cmsis_nn_dims filter_dimensions = {{ .n = input_count, .h = 1, .w = 1, .c = output_count }};
+    const cmsis_nn_dims bias_dimensions = {{ .n = 1, .h = 1, .w = 1, .c = output_count }};
+    const cmsis_nn_dims output_dimensions = {{ .n = 1, .h = 1, .w = 1, .c = output_count }};
+    (void)arm_fully_connected_s8(
+        &context,
+        &parameters,
+        &quantization,
+        &input_dimensions,
+        input,
+        &filter_dimensions,
+        weight,
+        &bias_dimensions,
+        bias,
+        &output_dimensions,
+        output);
+}}""",
+    )
+
+
 @kernel_capabilities.register
 def _linear_capabilities(
     step: LinearStep,
@@ -232,6 +286,43 @@ def _linear_capabilities(
     output_count = plan.tensors[step.output].tensor_type.shape[1]
     weight = plan.constants[step.weight]
     shape_valid = weight.dtype == np.int8 and weight.shape == (output_count, input_count)
+
+    def cmsis_nn_capability() -> KernelCapability:
+        failure: str | None = None
+        if not options.enable_cmsis_nn:
+            failure = "CMSIS-NN source bundling is disabled"
+        elif "dsp" not in options.target.features or "armv7e-m" not in options.target.features:
+            failure = "CMSIS-NN FC v4 requires an ARMv7E-M DSP target"
+        elif input_count * output_count < _MIN_OPTIMIZED_MACS:
+            failure = (
+                f"Linear MAC count {input_count * output_count} is below the "
+                f"CMSIS-NN threshold {_MIN_OPTIMIZED_MACS}"
+            )
+        elif not shape_valid:
+            failure = "semantic weight must be an OI int8 matrix matching the Linear shape"
+        elif len(set(step.multipliers)) != 1 or len(set(step.shifts)) != 1:
+            failure = (
+                "CMSIS-NN FullyConnected v4 exposes one per-tensor multiplier/shift; "
+                "this Linear uses per-output-channel requantization"
+            )
+        if failure is not None:
+            return KernelCapability(
+                kernel_id=_CMSIS_NN_ID,
+                priority=400,
+                optimized=True,
+                supported=False,
+                reason=failure,
+            )
+        return KernelCapability(
+            kernel_id=_CMSIS_NN_ID,
+            priority=400,
+            optimized=True,
+            supported=True,
+            reason=(
+                "pinned CMSIS-NN v4 FullyConnected source bundle supports this "
+                "per-tensor-requantized ARMv7E-M DSP Linear"
+            ),
+        )
 
     def cortex_m4_capability() -> KernelCapability:
         failure: str | None = None
@@ -375,7 +466,13 @@ def _linear_capabilities(
             constant_overrides={step.weight: packed.name},
         )
 
-    return (cortex_m4_capability(), pair_capability(), tail_capability(), portable)
+    return (
+        cmsis_nn_capability(),
+        cortex_m4_capability(),
+        pair_capability(),
+        tail_capability(),
+        portable,
+    )
 
 
 @emit_step.register
@@ -400,29 +497,49 @@ def _emit_linear(step: LinearStep, context: StepEmitContext) -> StepEmission:
     elif implementation == _CORTEX_M4_ID:
         kernel_fn = f"{context.symbol}_linear_cortex_m4_smlad_s8"
         selected_kernel = _cortex_m4_kernel(context)
+    elif implementation == _CMSIS_NN_ID:
+        kernel_fn = f"{context.symbol}_linear_cmsis_nn_s8"
+        selected_kernel = _cmsis_nn_kernel(context)
     else:
         raise CompileError(f"unsupported Linear C implementation {implementation}")
 
-    multiplier_symbol = f"{context.symbol}_op{context.step_index}_multiplier"
-    shift_symbol = f"{context.symbol}_op{context.step_index}_shift"
-    call = (
-        f"    {kernel_fn}(\n"
-        f"        {context.pointer(step.input, mutable=False)},\n"
-        f"        {context.pointer(step.weight, mutable=False)},\n"
-        f"        {context.pointer(step.bias, mutable=False)},\n"
-        f"        {multiplier_symbol},\n"
-        f"        {shift_symbol},\n"
-        f"        {context.pointer(step.output, mutable=True)},\n"
-        f"        {input_tensor.shape[1]}u, {output_tensor.shape[1]}u,\n"
-        f"        {input_qparams.zero_point}, {output_qparams.zero_point},\n"
-        f"        {step.activation_min}, {step.activation_max});"
-    )
-    return StepEmission(
-        constants=(
+    if implementation == _CMSIS_NN_ID:
+        constants: tuple[ConstantEmission, ...] = ()
+        kernels = (selected_kernel,)
+        call = (
+            f"    {kernel_fn}(\n"
+            f"        {context.pointer(step.input, mutable=False)},\n"
+            f"        {context.pointer(step.weight, mutable=False)},\n"
+            f"        {context.pointer(step.bias, mutable=False)},\n"
+            f"        {context.pointer(step.output, mutable=True)},\n"
+            f"        {input_tensor.shape[1]}, {output_tensor.shape[1]},\n"
+            f"        {input_qparams.zero_point}, {output_qparams.zero_point},\n"
+            f"        {step.multipliers[0]}, {step.shifts[0]},\n"
+            f"        {step.activation_min}, {step.activation_max});"
+        )
+    else:
+        multiplier_symbol = f"{context.symbol}_op{context.step_index}_multiplier"
+        shift_symbol = f"{context.symbol}_op{context.step_index}_shift"
+        constants = (
             _int32_constant(multiplier_symbol, step.multipliers),
             _int32_constant(shift_symbol, step.shifts),
-        ),
-        kernels=(q31_kernel(context), selected_kernel),
+        )
+        kernels = (q31_kernel(context), selected_kernel)
+        call = (
+            f"    {kernel_fn}(\n"
+            f"        {context.pointer(step.input, mutable=False)},\n"
+            f"        {context.pointer(step.weight, mutable=False)},\n"
+            f"        {context.pointer(step.bias, mutable=False)},\n"
+            f"        {multiplier_symbol},\n"
+            f"        {shift_symbol},\n"
+            f"        {context.pointer(step.output, mutable=True)},\n"
+            f"        {input_tensor.shape[1]}u, {output_tensor.shape[1]}u,\n"
+            f"        {input_qparams.zero_point}, {output_qparams.zero_point},\n"
+            f"        {step.activation_min}, {step.activation_max});"
+        )
+    return StepEmission(
+        constants=constants,
+        kernels=kernels,
         call=call,
         manifest={
             "name": step.name,

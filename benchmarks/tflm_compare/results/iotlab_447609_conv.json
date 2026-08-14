@@ -1,0 +1,73 @@
+{
+  "benchmark_id": "iotlab-447609-conv-only-bakenn-vs-tflm-reference",
+  "compiler": {
+    "flags": ["CONFIG_SPEED_OPTIMIZATIONS=y (-O2)", "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections"],
+    "linker_script": "Zephyr 2.7.5 nrf52840dk_nrf52840 linker.cmd; same board/toolchain configuration as MLP result",
+    "name": "arm-zephyr-eabi-gcc",
+    "version": "arm-zephyr-eabi-gcc (crosstool-NG 1.24.0.378_e011758) 10.3.0; Zephyr SDK 0.13.1"
+  },
+  "implementations": {
+    "bakenn": {
+      "metrics": {
+        "elf_flash_data_load_bytes": {"reason": null, "status": "measured", "value": 96},
+        "elf_flash_rodata_bytes": {"reason": null, "status": "measured", "value": 644},
+        "elf_flash_text_bytes": {"reason": null, "status": "measured", "value": 19592},
+        "elf_flash_total_bytes": {"reason": null, "status": "measured", "value": 20332},
+        "inference_median_cycles": {"reason": null, "status": "measured", "value": 24610},
+        "inference_p95_cycles": {"reason": null, "status": "measured", "value": 24610},
+        "init_cycles": {"reason": "Not enclosed by the target cycle counter.", "status": "unmeasured", "value": null},
+        "output_compared_bytes": {"reason": "The 32-byte UART line was truncated when main returned; checksum instrumentation is required for a byte-level oracle.", "status": "unmeasured", "value": null},
+        "output_max_abs_error_lsb": {"reason": "The 32-byte UART line was truncated when main returned.", "status": "unmeasured", "value": null},
+        "output_mismatched_bytes": {"reason": "The 32-byte UART line was truncated when main returned.", "status": "unmeasured", "value": null},
+        "peak_sram_arena_bytes": {"reason": null, "status": "measured", "value": 0},
+        "peak_sram_runtime_metadata_bytes": {"reason": "No interpreter exists, but full map disaggregation was not recorded.", "status": "unmeasured", "value": null},
+        "peak_sram_stack_bytes": {"reason": "Main-thread high-water was observed, but ISR/system stack high-water was not instrumented.", "status": "unmeasured", "value": null},
+        "peak_sram_static_data_bytes": {"reason": "The ELF reports 8160 linked SRAM bytes; components were not fully disaggregated.", "status": "unmeasured", "value": null},
+        "peak_sram_total_bytes": {"reason": "8160 bytes of linked SRAM reservation was measured; whole-firmware peak was not.", "status": "unmeasured", "value": null}
+      },
+      "source_revision": "c948a87e007f1cd30e3dd698486fa85a7d7f7bd4 plus uncommitted benchmark harness changes",
+      "version": "BakeNN 0.1.0 portable C Conv2D"
+    },
+    "tflm": {
+      "metrics": {
+        "elf_flash_data_load_bytes": {"reason": null, "status": "measured", "value": 268},
+        "elf_flash_rodata_bytes": {"reason": null, "status": "measured", "value": 11472},
+        "elf_flash_text_bytes": {"reason": null, "status": "measured", "value": 50020},
+        "elf_flash_total_bytes": {"reason": null, "status": "measured", "value": 61760},
+        "inference_median_cycles": {"reason": null, "status": "measured", "value": 27441},
+        "inference_p95_cycles": {"reason": null, "status": "measured", "value": 27441},
+        "init_cycles": {"reason": "AllocateTensors was not enclosed by the target cycle counter.", "status": "unmeasured", "value": null},
+        "output_compared_bytes": {"reason": "The 32-byte UART line was truncated when main returned; checksum instrumentation is required for a byte-level oracle.", "status": "unmeasured", "value": null},
+        "output_max_abs_error_lsb": {"reason": "The 32-byte UART line was truncated when main returned.", "status": "unmeasured", "value": null},
+        "output_mismatched_bytes": {"reason": "The 32-byte UART line was truncated when main returned.", "status": "unmeasured", "value": null},
+        "peak_sram_arena_bytes": {"reason": null, "status": "measured", "value": 2048},
+        "peak_sram_runtime_metadata_bytes": {"reason": "TFLM reported 516 arena bytes used, but persistent metadata was not separated from the arena.", "status": "unmeasured", "value": null},
+        "peak_sram_stack_bytes": {"reason": "Main-thread high-water was observed, but ISR/system stack high-water was not instrumented.", "status": "unmeasured", "value": null},
+        "peak_sram_static_data_bytes": {"reason": "The ELF reports 10624 linked SRAM bytes; components were not fully disaggregated.", "status": "unmeasured", "value": null},
+        "peak_sram_total_bytes": {"reason": "10624 bytes of linked SRAM reservation was measured; whole-firmware peak was not.", "status": "unmeasured", "value": null}
+      },
+      "source_revision": "9156d050927012da87079064db59d07f03b8baf6",
+      "version": "TFLite Micro Zephyr module, reference integer Conv2D kernel, resolver includes FullyConnected and Conv2D"
+    }
+  },
+  "model": {
+    "artifact_sha256": "d49b29fde0cea4522dc112444520f79d3b298c0304f778c8e620339d56226779",
+    "input_sha256": "5296baf7036e009fce2799f334b863a2c0aead8fb13e317b0d69291fc3fdf725",
+    "name": "tiny-CNN Conv2D-only: 1x4x4x1 -> 1x4x4x2, 3x3 SAME, fused ReLU"
+  },
+  "protocol": {
+    "cycle_counter": "Zephyr timing_counter_get/timing_cycles_get over Invoke or generated model call",
+    "input_count": 1,
+    "interrupt_policy": "Default Zephyr interrupts remained enabled; all 101 samples were identical within each implementation.",
+    "measured_runs": 101,
+    "warmup_runs": 8
+  },
+  "schema_version": 1,
+  "target": {
+    "architecture": "Armv7E-M Cortex-M4F, Thumb-2 DSP, 64 MHz",
+    "board": "FIT IoT-LAB nrf52840dk-10.saclay.iot-lab.info",
+    "clock_hz": 64000000,
+    "mcu": "Nordic nRF52840"
+  },
+  "timestamp_utc": "2026-08-14T16:32:50Z"
+}

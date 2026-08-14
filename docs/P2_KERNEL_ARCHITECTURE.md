@@ -209,7 +209,9 @@ The following are explicit next-phase limitations, not hidden fallbacks:
 - the generic OI2 family remains standard C; the Cortex-M4 family is a distinct
   intrinsic implementation and does not alter the generic artifact;
 - the host smoke benchmark is useful only for regression detection;
-- Flash, peak SRAM, cycles and energy on a chosen MCU remain unmeasured.
+- nRF52840 Flash, linked SRAM, cycles and output checksums are measured for the
+  frozen FC and standalone Conv reports; full peak SRAM decomposition,
+  initialization cycles, energy and other targets remain unmeasured.
 
 Until same-device evidence is added, portable remains the default and BakeNN
 must not claim that `AUTO` is universally faster.

@@ -6,6 +6,50 @@ numbers. A result is publishable only after both implementations are built for
 the same physical target and execute the same quantized model semantics and
 input bytes.
 
+A first physical nRF52840DK result and its limitations are recorded in
+[`results/iotlab_447609.md`](results/iotlab_447609.md). The matching JSON passes
+this directory's schema validator. `generate_mlp_tflite.py` creates the exact
+comparison FlatBuffer without requiring the full TensorFlow Python package,
+and `zephyr_nrf52840/` is the selective-resolver TFLM runner used on the node.
+
+Use `--model mlp` for the original 32→16→4 fixture, `--model cmsis-mlp` for
+the per-tensor-weight FC graph shared by BakeNN's direct CMSIS-NN backend and
+TFLM, or `--model conv` for the static 3×3 Conv2D fixture. The runner exports
+an FNV-1a output checksum so long output tensors do not get truncated when the
+MCU process exits.
+
+A separate Conv2D-only run is recorded in
+[`results/iotlab_447609_conv.md`](results/iotlab_447609_conv.md), with its
+machine-readable result in `results/iotlab_447609_conv.json`.
+
+The CMSIS-NN opt-in was physically measured on the same nRF52840DK as BakeNN
+in experiment `447626`; see
+[`results/iotlab_447626_cmsis_nn.md`](results/iotlab_447626_cmsis_nn.md).
+The exact-model four-way FC result, including BakeNN's direct CMSIS-NN source
+backend, is in
+[`results/iotlab_447626_direct_cmsis_fc.md`](results/iotlab_447626_direct_cmsis_fc.md).
+
+## CMSIS-NN opt-in
+
+The Zephyr 2.7 TFLM module used by this harness contains the CMSIS-NN wrapper
+sources but not the CMSIS-NN library itself, and its CMake integration always
+builds the reference kernels.  The runner therefore has an explicit opt-in
+path for a pinned CMSIS-NN checkout:
+
+```sh
+west build -b nrf52840dk/nrf52840 benchmarks/tflm_compare/zephyr_nrf52840 \
+  -- -DBAKENN_USE_CMSIS_NN=ON \
+     -DBAKENN_CMSIS_NN_ROOT=$HOME/cmsis-nn-bakenn \
+     -DBAKENN_CMSIS_CORE_ROOT=$HOME/zephyrproject/modules/hal/cmsis/CMSIS/Core/Include \
+     -DBAKENN_TFLM_ROOT=$HOME/zephyrproject/modules/lib/tflite-micro
+```
+
+This enables the CMSIS-NN `FullyConnected` and `Conv2D` wrappers; the default
+remains TFLM reference.  The build records the pinned CMSIS-NN commit and
+compiler configuration in the benchmark result.  A CMSIS-NN result must be
+compared against the same FlatBuffer and raw input bytes; it must not be mixed
+with the earlier reference-kernel result.
+
 ## Fair-comparison contract
 
 1. Freeze one fully quantized model. Record a SHA-256 over its canonical BakeNN

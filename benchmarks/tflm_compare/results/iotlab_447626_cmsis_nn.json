@@ -1,0 +1,80 @@
+{
+  "benchmark_id": "iotlab-447626-bakenn-vs-tflm-cmsis-nn-int8-mlp",
+  "compiler": {
+    "flags": [
+      "CONFIG_SPEED_OPTIMIZATIONS=y (-O2)",
+      "-ffunction-sections",
+      "-fdata-sections",
+      "-Wl,--gc-sections",
+      "CMSIS_NN",
+      "ARM_MATH_SUCCESS=ARM_CMSIS_NN_SUCCESS"
+    ],
+    "linker_script": "Zephyr 2.7.5 nrf52840dk_nrf52840 linker.cmd; Flash categories from zephyr.map _flash_used",
+    "name": "arm-zephyr-eabi-gcc",
+    "version": "arm-zephyr-eabi-gcc (crosstool-NG 1.24.0.378_e011758) 10.3.0; Zephyr SDK 0.13.1"
+  },
+  "implementations": {
+    "bakenn": {
+      "metrics": {
+        "elf_flash_data_load_bytes": {"reason": null, "status": "measured", "value": 100},
+        "elf_flash_rodata_bytes": {"reason": null, "status": "measured", "value": 1416},
+        "elf_flash_text_bytes": {"reason": null, "status": "measured", "value": 19204},
+        "elf_flash_total_bytes": {"reason": null, "status": "measured", "value": 20720},
+        "inference_median_cycles": {"reason": null, "status": "measured", "value": 8508},
+        "inference_p95_cycles": {"reason": null, "status": "measured", "value": 8508},
+        "init_cycles": {"reason": "The runner measured first inference, not reset-through-ready initialization.", "status": "unmeasured", "value": null},
+        "output_compared_bytes": {"reason": null, "status": "measured", "value": 4},
+        "output_max_abs_error_lsb": {"reason": null, "status": "measured", "value": 1},
+        "output_mismatched_bytes": {"reason": null, "status": "measured", "value": 2},
+        "peak_sram_arena_bytes": {"reason": null, "status": "measured", "value": 16},
+        "peak_sram_runtime_metadata_bytes": {"reason": "The linked image has no interpreter, but a whole-firmware component proof was not recorded.", "status": "unmeasured", "value": null},
+        "peak_sram_stack_bytes": {"reason": "The runner reported current-thread high-water only; ISR/system stack was not instrumented.", "status": "unmeasured", "value": null},
+        "peak_sram_static_data_bytes": {"reason": "The ELF reports 8192 linked SRAM bytes, but disjoint application/static/stack components were not fully separated.", "status": "unmeasured", "value": null},
+        "peak_sram_total_bytes": {"reason": "8192 bytes of linked SRAM reservation was measured; simultaneous whole-firmware peak was not.", "status": "unmeasured", "value": null}
+      },
+      "source_revision": "5b5af17a140c6a3d2150814c74a6668e0c337d73c2cff6af6b6fe9792de8f4d0 plus uncommitted benchmark harness changes",
+      "version": "BakeNN 0.1.0 portable C backend"
+    },
+    "tflm": {
+      "metrics": {
+        "elf_flash_data_load_bytes": {"reason": null, "status": "measured", "value": 260},
+        "elf_flash_rodata_bytes": {"reason": null, "status": "measured", "value": 13160},
+        "elf_flash_text_bytes": {"reason": null, "status": "measured", "value": 50508},
+        "elf_flash_total_bytes": {"reason": null, "status": "measured", "value": 63928},
+        "inference_median_cycles": {"reason": null, "status": "measured", "value": 5499},
+        "inference_p95_cycles": {"reason": null, "status": "measured", "value": 5499},
+        "init_cycles": {"reason": "The runner measured first inference, not reset-through-ready initialization.", "status": "unmeasured", "value": null},
+        "output_compared_bytes": {"reason": null, "status": "measured", "value": 4},
+        "output_max_abs_error_lsb": {"reason": null, "status": "measured", "value": 1},
+        "output_mismatched_bytes": {"reason": null, "status": "measured", "value": 2},
+        "peak_sram_arena_bytes": {"reason": null, "status": "measured", "value": 1024},
+        "peak_sram_runtime_metadata_bytes": {"reason": "TFLM reported 580 arena bytes used, but persistent metadata was not split from activation storage.", "status": "unmeasured", "value": null},
+        "peak_sram_stack_bytes": {"reason": "The runner reported 696 bytes of current-thread stack use; ISR/system stack was not instrumented.", "status": "unmeasured", "value": null},
+        "peak_sram_static_data_bytes": {"reason": "The ELF reports 10656 linked SRAM bytes, but arena, runtime metadata, stack, and static components were not fully disaggregated.", "status": "unmeasured", "value": null},
+        "peak_sram_total_bytes": {"reason": "10656 bytes of linked SRAM reservation was measured; simultaneous whole-firmware peak was not.", "status": "unmeasured", "value": null}
+      },
+      "source_revision": "TFLM 9156d050927012da87079064db59d07f03b8baf6; CMSIS-NN ca5dc34313be2ee5c46652917c30baac96c52621 (v4.0.0)",
+      "version": "TFLM Zephyr selective resolver + CMSIS-NN FullyConnected int8 wrapper"
+    }
+  },
+  "model": {
+    "artifact_sha256": "dd18dfbac4f2abc237aa2eb70809193e7d1dfa0d85c7d11b8eb3b499810df592",
+    "input_sha256": "af9613760f72635fbdb44a5a0a63c39f12af30f950a6ee5c971be188e89c4051",
+    "name": "target-smoke INT8 MLP 32x16x4; input is 32 bytes at zero-point -1"
+  },
+  "protocol": {
+    "cycle_counter": "Zephyr timing_counter_get/timing_cycles_get over Invoke or generated model call; 64-bit reported cycles",
+    "input_count": 1,
+    "interrupt_policy": "Default Zephyr interrupts remained enabled; all 101 samples were identical within each implementation.",
+    "measured_runs": 101,
+    "warmup_runs": 8
+  },
+  "schema_version": 1,
+  "target": {
+    "architecture": "Armv7E-M Cortex-M4F, Thumb-2 DSP, 64 MHz",
+    "board": "FIT IoT-LAB nrf52840dk-1.saclay.iot-lab.info",
+    "clock_hz": 64000000,
+    "mcu": "Nordic nRF52840"
+  },
+  "timestamp_utc": "2026-08-14T17:09:09Z"
+}

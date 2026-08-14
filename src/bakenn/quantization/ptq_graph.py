@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
+from enum import Enum
 from typing import Iterator, Mapping
 
 import numpy as np
@@ -59,7 +61,30 @@ from bakenn.ir.verify import verify_graph
 from bakenn.ir.verifiers.softmax import SOFTMAX_OUTPUT_SCALE, SOFTMAX_OUTPUT_ZERO_POINT
 from bakenn.passes import fuse_clamps, legalize_graph
 from bakenn.quantization.fixedpoint import ARITHMETIC_PROFILE
-from bakenn.quantization.primitives import quantize_compute_constants
+from bakenn.quantization.primitives import (
+    quantize_compute_constants,
+    quantize_linear_compute_constants_per_tensor,
+)
+
+
+class LinearWeightGranularity(str, Enum):
+    PER_CHANNEL = "per_channel"
+    PER_TENSOR = "per_tensor"
+
+
+@dataclass(frozen=True)
+class PTQOptions:
+    """Host-side quantization policy that does not change graph topology."""
+
+    linear_weight_granularity: LinearWeightGranularity = (
+        LinearWeightGranularity.PER_CHANNEL
+    )
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.linear_weight_granularity, LinearWeightGranularity):
+            raise ValueError(
+                "linear_weight_granularity must use LinearWeightGranularity"
+            )
 
 
 def _round_away(values: np.ndarray | float) -> np.ndarray:
@@ -579,6 +604,7 @@ def quantize_float_graph(
     calibration_data: object,
     *,
     name: str | None = None,
+    options: PTQOptions | None = None,
 ) -> QuantizedGraph:
     """Deterministically PTQ a captured static FloatGraph into P0 INT8 IR."""
 
@@ -586,6 +612,9 @@ def quantize_float_graph(
         raise CompileError("quantize_float_graph requires a FloatGraph")
     if name is not None and (not isinstance(name, str) or not name):
         raise CompileError("quantized graph name must be a non-empty string")
+    resolved_options = PTQOptions() if options is None else options
+    if not isinstance(resolved_options, PTQOptions):
+        raise TypeError("options must be PTQOptions")
     observed: dict[str, list[float]] = {
         value_name: [math.inf, -math.inf]
         for value_name, value in graph.values.items()
@@ -714,13 +743,28 @@ def quantize_float_graph(
         )
         output_qparams = values[op.output].qparams
         assert isinstance(output_qparams, PerTensorQParams)
-        quantized_weight, quantized_bias = quantize_compute_constants(
-            canonical_weight,
-            bias_source,
-            layout=weight_layout,
-            input_qparams=input_qparams,
-            output_qparams=output_qparams,
-        )
+        if (
+            isinstance(op, FloatLinearOp)
+            and resolved_options.linear_weight_granularity
+            is LinearWeightGranularity.PER_TENSOR
+        ):
+            if weight_layout is not Layout.OI:
+                raise CompileError("per-tensor Linear quantization requires OI layout")
+            quantized_weight, quantized_bias = (
+                quantize_linear_compute_constants_per_tensor(
+                    canonical_weight,
+                    bias_source,
+                    input_qparams=input_qparams,
+                )
+            )
+        else:
+            quantized_weight, quantized_bias = quantize_compute_constants(
+                canonical_weight,
+                bias_source,
+                layout=weight_layout,
+                input_qparams=input_qparams,
+                output_qparams=output_qparams,
+            )
         weight_name = unique_value(f"{op.name}.weight")
         values[weight_name] = TensorType(
             tuple(quantized_weight.values.shape),
@@ -1061,4 +1105,8 @@ def quantize_float_graph(
     return fused
 
 
-__all__ = ["quantize_float_graph"]
+__all__ = [
+    "LinearWeightGranularity",
+    "PTQOptions",
+    "quantize_float_graph",
+]

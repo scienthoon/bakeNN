@@ -4,7 +4,12 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from bakenn.backend.portable_c import CBackendOptions, CompilationArtifacts, generate_portable_c
+from bakenn.backend.portable_c import (
+    CBackendOptions,
+    CompilationArtifacts,
+    KernelPolicy,
+    generate_portable_c,
+)
 from bakenn.ir import QuantizedGraph
 from bakenn.passes import deduplicate_constants, fuse_clamps, legalize_graph
 from bakenn.plan import ExecutionPlan, lower_to_plan
@@ -12,6 +17,7 @@ from bakenn.targets import PORTABLE_32, TargetDescriptor, resolve_target
 
 if TYPE_CHECKING:
     from bakenn.frontends.torch_export import FloatGraph
+    from bakenn.quantization.ptq_graph import PTQOptions
 
 
 @dataclass(frozen=True)
@@ -67,6 +73,7 @@ def compile_torch_ptq(
     *,
     name: str | None = None,
     backend_options: CBackendOptions | None = None,
+    ptq_options: "PTQOptions | None" = None,
     target: str | TargetDescriptor | None = None,
 ) -> PTQCompiledModel:
     """Capture, PTQ, legalize, statically plan, and emit one PyTorch model.
@@ -76,10 +83,36 @@ def compile_torch_ptq(
     """
 
     from bakenn.frontends.torch_export import capture_torch_export
-    from bakenn.quantization.ptq_graph import quantize_float_graph
+    from bakenn.quantization.ptq_graph import (
+        LinearWeightGranularity,
+        PTQOptions,
+        quantize_float_graph,
+    )
 
     float_graph = capture_torch_export(model, example_input, name=name)
-    graph = quantize_float_graph(float_graph, calibration_data, name=name)
+    resolved_ptq_options = ptq_options
+    cmsis_target = (
+        resolve_target(target)
+        if target is not None
+        else (backend_options.target if backend_options is not None else PORTABLE_32)
+    )
+    if (
+        resolved_ptq_options is None
+        and backend_options is not None
+        and backend_options.enable_cmsis_nn
+        and backend_options.kernel_policy is not KernelPolicy.PORTABLE
+        and "armv7e-m" in cmsis_target.features
+        and "dsp" in cmsis_target.features
+    ):
+        resolved_ptq_options = PTQOptions(
+            linear_weight_granularity=LinearWeightGranularity.PER_TENSOR
+        )
+    graph = quantize_float_graph(
+        float_graph,
+        calibration_data,
+        name=name,
+        options=resolved_ptq_options,
+    )
     compiled = compile(
         graph,
         output_dir,

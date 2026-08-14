@@ -10,10 +10,30 @@ depthwise/residual/SE blocks, and fixed-resolution encoder-decoder graphs.
 Unsupported semantics fail during host compilation; there is no deployment-time
 float fallback.
 
-The implementation baseline compiles MobileNetV3, EfficientNet-Lite-style and
-compact U-Net graphs end to end. Physical-target Flash/SRAM/cycle
-comparisons against TFLM have not been measured, so this repository does not
-yet claim that BakeNN is smaller or faster on a particular MCU.
+The implementation baseline compiles MobileNetV3, MobileNetV2, EfficientNet-
+Lite-style, residual and compact U-Net graphs end to end. A physical
+nRF52840DK comparison is checked in for a fixed FC graph and a standalone
+Conv2D graph. Those measurements demonstrate the generated-C path on one
+Cortex-M4 target; they are not a claim that every BakeNN model or every MCU is
+faster than TFLM. See the [physical FC result](benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md)
+and the [benchmark protocol](benchmarks/tflm_compare/README.md).
+
+### First physical evidence
+
+The following measurements are from the same frozen `32 -> 16 -> 4` INT8
+fully-connected workload on an IoT-LAB nRF52840DK (Cortex-M4, 64 MHz). They
+are evidence for this workload only, not a universal model or MCU ranking.
+
+| Build | Median cycles | Flash (text+data) | SRAM (data+bss) |
+|---|---:|---:|---:|
+| BakeNN direct CMSIS-NN FC | 3,786 | 20,920 B | 8,540 B |
+| TFLM + CMSIS-NN FC | 5,418 | 69,640 B | 11,040 B |
+| BakeNN portable FC | 8,706 | 20,764 B | 8,540 B |
+| TFLM reference FC | 9,342 | 63,176 B | 11,008 B |
+
+The [standalone Conv2D report](benchmarks/tflm_compare/results/iotlab_447609_conv.md)
+uses BakeNN's portable kernel versus TFLM reference and is not a CMSIS-NN
+convolution comparison.
 
 ```text
 PyTorch FP32 eval model + calibration samples
@@ -66,6 +86,8 @@ Model-level host gates currently cover:
 
 - unmodified torchvision `mobilenet_v3_small` and `mobilenet_v3_large` graphs
   through FP32 capture, PTQ, planning and C artifact generation;
+- unmodified torchvision `mobilenet_v2` at static 32x32 through FP32 capture,
+  PTQ, planning, generated-C compilation and raw INT8 byte-exact execution;
 - an EfficientNet-Lite-style ReLU6 MBConv classifier, plus torchvision
   EfficientNet-B0 as a harder SiLU/SE-broadcast frontend superset;
 - unmodified torchvision MNASNet0.5 through FP32 capture, PTQ, planning and C
@@ -77,9 +99,12 @@ Model-level host gates currently cover:
   MLP models through dequantized-accuracy and byte-exact generated-C tests.
 
 The compact models are compiled with GCC and Clang under ASan/UBSan and their C
-outputs are byte-exact with the Python INT8 reference. This is compiler
-correctness evidence, not pretrained-dataset accuracy or MCU performance
-evidence.
+outputs are byte-exact with the Python INT8 reference. The real-data training
+matrix covers two MNIST and four CIFAR-10 models after one epoch; its accuracy
+and memory results are recorded in
+[`examples/training_matrix/RESULTS.md`](examples/training_matrix/RESULTS.md).
+This host matrix is separate from the physical nRF52840 evidence described
+above.
 
 The one-call PyTorch PTQ path is:
 
@@ -127,8 +152,9 @@ The generic first slice includes `optimized.linear_oi2.v1` and its odd-output
 `optimized.depthwise_3x3_c2.v1`. Unsupported shapes fall back to portable C;
 `REQUIRE_OPTIMIZED` is available for coverage audits that should fail instead
 of falling back. The artifact manifest records every selection, rejection
-reason and packed layout. This is host-verified backend infrastructure, not
-yet evidence of an MCU speedup.
+reason and packed layout. The generic candidates remain host-verified
+specializations; the first measured target result is recorded separately
+below.
 
 The `cortex-m4` profile additionally has real Arm DSP-intrinsic candidates:
 
@@ -142,8 +168,17 @@ The `cortex-m4` profile additionally has real Arm DSP-intrinsic candidates:
 The 3x3 Conv candidate uses a reusable one-output-pixel im2col scratch region.
 The Arm cross-ELF tests verify that GNU Arm emits actual `smlad` instructions
 and that the final ELF has no unresolved, heap, or floating-runtime symbols.
-Packed SMLAD weights can increase Flash, and no physical cycle result exists,
-so target eligibility is not itself a performance claim.
+Packed SMLAD weights can increase Flash. Target eligibility is not itself a
+performance claim; the measured nRF52840 results cover only the checked-in
+FC/Conv workloads.
+
+The optional direct CMSIS-NN source backend currently covers FullyConnected on
+an ARMv7E-M DSP target. It bundles only the required CMSIS-NN v4 source closure
+and selects `cmsis_nn.linear_s8.v4.0.0` when the Linear has the required
+per-tensor requantization contract. Conv2D and DepthwiseConv2D continue to use
+BakeNN's own Cortex-M4 or portable kernels until their direct CMSIS-NN
+adapters are added. Unsupported cases fall back or fail under
+`REQUIRE_OPTIMIZED`.
 
 Target selection is optional. `portable32` remains the default; ARM/RISC-V
 profiles add exact ABI/alignment/compiler metadata and ESP profiles can emit an
@@ -164,8 +199,11 @@ project = bakenn.export_esp_idf_project(
 The built-in target ids are `portable32`, `cortex-m0plus`, `cortex-m4`,
 `rv32imc`, `esp32`, `esp32s3`, and `esp32c3`. ARM M0+/M4 and RV32IMC have a
 freestanding ELF/link-map/symbol-audit path. ESP-IDF packaging and boardless
-build CI are provided, but no target has a measured cost table or physical
-cycle/energy result. See [the target-layer contract](docs/TARGETS.md).
+build CI are provided. Physical cycle evidence currently covers the
+nRF52840DK/Cortex-M4 benchmark in
+[`benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md`](benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md);
+no ESP or whole-firmware energy result is claimed. See [the target-layer
+contract](docs/TARGETS.md).
 
 `AUTO` currently means "select an applicable verified specialization". It is
 not a target cost model and does not promise lower latency, Flash, or energy.
@@ -179,8 +217,9 @@ PYTHONPATH=src python benchmarks/host_linear_compare.py --kernel conv1x1
 PYTHONPATH=src python benchmarks/host_linear_compare.py --kernel depthwise3x3
 ```
 
-These results are regression evidence only, never MCU or TFLM performance
-evidence.
+Host results are regression evidence. The separate IoT-LAB result is the only
+current MCU/TFLM performance evidence and is explicitly limited to its frozen
+model, board, compiler and protocol.
 
 The framework frontend captures through the real `torch.export` API and imports
 PyTorch only when used. It produces immutable BakeNN-owned types immediately;
@@ -220,8 +259,8 @@ its `restrict` ABI requires input, output, and arena to be disjoint.
 The offline comparison contract under
 [`benchmarks/tflm_compare`](benchmarks/tflm_compare/README.md) records final
 ELF Flash, full peak SRAM, initialization/inference cycles, and output error.
-Its checked-in example is explicitly unmeasured and contains no benchmark
-claim.
+The checked-in template remains explicitly unmeasured, while the measured FC
+and Conv reports are linked from that directory.
 
 **Bake neural networks into firmware.**
 

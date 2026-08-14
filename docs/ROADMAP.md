@@ -1,6 +1,6 @@
 # BakeNN roadmap
 
-Status date: 2026-08-14
+Status date: 2026-08-15
 
 This document starts from the code that exists today and defines the work
 required before BakeNN can make target-performance or broad compatibility
@@ -29,9 +29,10 @@ The following are implemented and covered by the current host test suite:
 - ARM/RISC-V cross-link and symbol audit, plus ESP-IDF project generation;
 - Python reference versus generated-C byte-exact tests.
 
-The current full suite passes 233 tests and 6 subtests. Cortex-M4 ELF
-disassembly contains the expected `smlad` instructions. No physical target
-cycle, stack, energy or BakeNN-versus-TFLM result has been measured.
+The current full suite passes 257 tests and 6 subtests. Cortex-M4 ELF
+disassembly contains the expected `smlad` instructions. A first physical
+nRF52840DK result is recorded for a frozen FC graph and a standalone Conv2D
+graph; full-model and full-peak-SRAM evidence remains future work.
 
 ## Rules that apply to every phase
 
@@ -262,7 +263,18 @@ Acceptance:
 
 ## R3 — First physical performance evidence
 
-Priority: after R1 and R2.
+Status: partial completion on FIT IoT-LAB nRF52840DK.
+
+The first frozen FC benchmark is complete. On the same 64 MHz Cortex-M4 board,
+BakeNN direct CMSIS-NN measured 3,786 median cycles versus 5,418 for TFLM with
+CMSIS-NN, with identical output bytes. BakeNN portable measured 8,706 cycles
+and TFLM reference 9,342 cycles. A separate standalone Conv2D reference run is
+also recorded. These are workload-specific measurements, not a universal
+model-performance claim.
+
+Remaining R3 work is to freeze and measure TinyCNN, residual, CIFAR and reduced
+MobileNet graphs with a matching TFLM operator set and to collect the full
+SRAM/initialization metrics whenever the target runner can provide them.
 
 Use at least one exact Cortex-M4 board and one ESP32-S3 board obtained through a
 contributor, lab, reviewer or remote hardware runner. Ownership is not
@@ -668,8 +680,9 @@ These are not near-term goals:
 3. R1A OPT-03/04: add the static direct and budgeted-unroll candidates behind
    explicit experimental/static selection.
 4. R2 remote hardware benchmark bundles and validators.
-5. R3 obtain one Cortex-M4 and one ESP32-S3 physical result set, including the
-   portable and eligible R1A Conv candidates.
+5. R3 extend the Cortex-M4 result set from FC/standalone Conv to TinyCNN,
+   residual and reduced MobileNet workloads; then obtain an ESP32-S3 result
+   set before enabling measured selection.
 6. Populate only evidence-backed cost entries and enable measured selection.
 7. R4 generalize Arm DSP for Cortex-M7/M33, then implement ESP32-S3 and
    ESP32-P4 kernels in the declared order, guided by measured bottlenecks.

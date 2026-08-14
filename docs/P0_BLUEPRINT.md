@@ -1,6 +1,7 @@
 # BakeNN P0 Blueprint
 
-Status: implemented host baseline; physical-target performance evidence pending
+Status: implemented host baseline; first nRF52840/TFLM evidence recorded for
+frozen FC and standalone Conv workloads
 
 P0 is the first release that can compile representative fixed-shape MCU
 networks rather than a demonstration MLP. It is deliberately narrower than

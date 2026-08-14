@@ -19,6 +19,7 @@ from .freestanding import (
     discover_gnu_toolchain,
 )
 from .esp_idf import ESPIDFProject, export_esp_idf_component, export_esp_idf_project
+from .zephyr import ZephyrProject, export_zephyr_project
 
 __all__ = [
     "CORTEX_M0PLUS",
@@ -35,9 +36,11 @@ __all__ = [
     "TargetArchitecture",
     "TargetBuildReport",
     "TargetDescriptor",
+    "ZephyrProject",
     "build_freestanding_elf",
     "discover_gnu_toolchain",
     "export_esp_idf_component",
     "export_esp_idf_project",
+    "export_zephyr_project",
     "resolve_target",
 ]

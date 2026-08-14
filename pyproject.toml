@@ -19,5 +19,15 @@ test = ["pytest>=8"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"bakenn.backend.cmsis_nn.vendor" = [
+  "cmsis_nn/Include/*.h",
+  "cmsis_nn/Source/FullyConnectedFunctions/*.c",
+  "cmsis_nn/Source/NNSupportFunctions/*.c",
+  "cmsis_nn/LICENSE.txt",
+  "cmsis_core/Include/*.h",
+  "cmsis_core/LICENSE.txt",
+]
+
 [tool.setuptools.dynamic]
 version = { attr = "bakenn._version.VERSION" }

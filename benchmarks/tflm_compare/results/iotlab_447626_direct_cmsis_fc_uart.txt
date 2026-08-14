@@ -1,0 +1,19 @@
+FIT IoT-LAB experiment 447626
+Node: nrf52840dk-1.saclay.iot-lab.info
+Model: exact INT8 32x16x4 FC, input=32 bytes at zero-point -3
+
+BakeNN direct CMSIS-NN v4.0.0
+first_cycles=3897 median_cycles=3786 p95_cycles=3786 arena_bytes=16 stack_unused_bytes=3584
+BAKENN_OUTPUT_FNV1A=0x910c1fe2 first -5 -4 -4 -4
+
+TFLM CMSIS-NN v4.0.0
+first_cycles=5525 median_cycles=5418 p95_cycles=5418 tensor_arena_bytes=1024 tensor_arena_used_bytes=580 stack_unused_bytes=3400
+TFLM_OUTPUT_FNV1A=0x910c1fe2 first -5 -4 -4 -4
+
+BakeNN portable C
+first_cycles=8739 median_cycles=8706 p95_cycles=8706 arena_bytes=16 stack_unused_bytes=3584
+BAKENN_OUTPUT_FNV1A=0x910c1fe2 first -5 -4 -4 -4
+
+TFLM reference
+first_cycles=9457 median_cycles=9342 p95_cycles=9342 tensor_arena_bytes=1024
+TFLM_OUTPUT_FNV1A=0x910c1fe2 first -5 -4 -4 -4

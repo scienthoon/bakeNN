@@ -13,6 +13,14 @@ def __getattr__(name: str):
         from .ptq_graph import quantize_float_graph
 
         return quantize_float_graph
+    if name in {"LinearWeightGranularity", "PTQOptions"}:
+        from .ptq_graph import LinearWeightGranularity, PTQOptions
+
+        exports = {
+            "LinearWeightGranularity": LinearWeightGranularity,
+            "PTQOptions": PTQOptions,
+        }
+        return exports[name]
     if name in {"FloatLinear", "FloatMLP", "quantize_ptq"}:
         from .ptq import FloatLinear, FloatMLP, quantize_ptq
 
@@ -28,6 +36,8 @@ __all__ = [
     "ARITHMETIC_PROFILE",
     "FloatLinear",
     "FloatMLP",
+    "LinearWeightGranularity",
+    "PTQOptions",
     "multiply_by_quantized_multiplier",
     "quantize_multiplier",
     "quantize_float_graph",

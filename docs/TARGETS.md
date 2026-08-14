@@ -1,7 +1,8 @@
 # BakeNN target layer
 
 Status: ARM/RISC-V cross-link path host-verified; ESP-IDF packaging implemented;
-no physical-target performance claim
+first physical nRF52840/Cortex-M4 FC and standalone Conv evidence recorded;
+other targets and full peak-resource claims remain unmeasured
 
 BakeNN keeps numerical semantics separate from target lowering:
 

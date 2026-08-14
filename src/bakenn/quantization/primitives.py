@@ -396,10 +396,66 @@ def quantize_compute_constants(
     return quantized_weight, quantized_bias
 
 
+def quantize_linear_compute_constants_per_tensor(
+    weight: object,
+    bias: object,
+    *,
+    input_qparams: PerTensorQParams,
+) -> tuple[QuantizedWeights, QuantizedBias]:
+    """Quantize one Linear with the single weight scale required by CMSIS-NN FC.
+
+    BakeNN keeps the semantic IR's per-output-axis representation, but repeats
+    one scale for every output channel.  This makes the resulting requantization
+    multiplier and shift identical without weakening the verifier contract.
+    """
+
+    if not isinstance(input_qparams, PerTensorQParams):
+        raise CompileError("per-tensor Linear quantization requires input qparams")
+    weight_snapshot = _float32_snapshot(weight, "Linear weight")
+    bias_snapshot = _float32_snapshot(bias, "Linear bias")
+    if weight_snapshot.ndim != 2 or 0 in weight_snapshot.shape:
+        raise CompileError("Linear weight must be a non-empty OI matrix")
+    output_channels = weight_snapshot.shape[0]
+    if bias_snapshot.shape != (output_channels,):
+        raise CompileError("Linear bias must have one value per output channel")
+
+    maximum = float(np.max(np.abs(weight_snapshot)))
+    if maximum == 0.0:
+        if np.any(bias_snapshot != np.float32(0.0)):
+            raise CompileError(
+                "all-zero Linear weights with nonzero bias require constant folding "
+                "before CMSIS-NN per-tensor quantization"
+            )
+        scale = 1.0
+    else:
+        try:
+            scale = normalize_scale_float32(maximum / 127.0)
+        except ValueError as error:
+            raise CompileError(
+                "Linear per-tensor weight scale is not deployable"
+            ) from error
+
+    quantized_values = _round_away(weight_snapshot / np.float32(scale))
+    quantized_values = np.clip(quantized_values, -127, 127).astype(np.int8)
+    qparams = PerAxisQParams(
+        scales=(scale,) * output_channels,
+        zero_points=(0,) * output_channels,
+        axis=0,
+    )
+    quantized_weight = QuantizedWeights(quantized_values, qparams, Layout.OI)
+    quantized_bias = _quantize_bias_int32(
+        bias_snapshot,
+        input_scale=input_qparams.scale,
+        weight_qparams=qparams,
+    )
+    return quantized_weight, quantized_bias
+
+
 __all__ = [
     "QuantizedBias",
     "QuantizedWeights",
     "quantize_bias_int32",
     "quantize_compute_constants",
+    "quantize_linear_compute_constants_per_tensor",
     "quantize_weights_per_channel",
 ]

@@ -450,6 +450,11 @@ def test_fp32_torch_ptq_to_generated_c_is_bit_exact_and_accurate(
             100,
         ),
         (
+            "mobilenet_v2",
+            {"FloatDepthwiseConv2DOp", "FloatReLU6Op", "FloatAddOp"},
+            60,
+        ),
+        (
             # torchvision does not ship Google's Lite checkpoint.  B0 is a
             # semantic superset here because it retains SiLU and SE broadcast.
             "efficientnet_b0",
@@ -489,3 +494,54 @@ def test_unmodified_torchvision_backbone_reaches_generated_c(
     assert len(compiled.plan.steps) >= minimum_plan_steps
     assert compiled.artifacts.model_source.stat().st_size > 0
     assert compiled.artifacts.weights_source.stat().st_size > 0
+
+
+def test_unmodified_torchvision_mobilenet_v2_generated_c_is_byte_exact(
+    tmp_path: Path,
+) -> None:
+    """Run a small raw-int8 corpus through the complete V2 generated C ABI."""
+
+    try:
+        import torchvision.models as models
+    except (ImportError, RuntimeError) as error:
+        pytest.skip(f"torchvision is unavailable: {error}")
+    if shutil.which("cc") is None:
+        pytest.skip("host C compiler is unavailable")
+    compiler = "cc"
+
+    torch.manual_seed(20260815)
+    model = models.mobilenet_v2(weights=None).eval()
+    sample = torch.randn(1, 3, 32, 32)
+    compiled = bakenn.compile_torch_ptq(
+        model,
+        sample,
+        [sample],
+        tmp_path / "mobilenet_v2_c",
+        name="mobilenet_v2_c",
+    )
+    executable = _compile_runner(compiled.artifacts, tmp_path / "mobilenet_v2_c", compiler)
+    input_type = compiled.graph.values[compiled.graph.inputs[0]]
+    rng = np.random.default_rng(20260815)
+    inputs = rng.integers(
+        -128,
+        128,
+        size=(2, *input_type.shape[1:]),
+        dtype=np.int16,
+    ).astype(np.int8)
+    expected = np.concatenate(
+        [
+            bakenn.run_reference(compiled.plan, item.reshape(input_type.shape))
+            for item in inputs
+        ],
+        axis=0,
+    )
+    process = subprocess.run(
+        executable,
+        input=inputs.tobytes(),
+        capture_output=True,
+        check=True,
+    )
+    np.testing.assert_array_equal(
+        np.frombuffer(process.stdout, dtype=np.int8).reshape(expected.shape),
+        expected,
+    )

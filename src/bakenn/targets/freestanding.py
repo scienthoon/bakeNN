@@ -280,6 +280,7 @@ def _artifact_sources(artifacts: "CompilationArtifacts") -> tuple[Path, ...]:
         artifacts.model_source,
         artifacts.weights_source,
         artifacts.kernels_source,
+        *artifacts.support_sources,
     )
 
 
@@ -336,6 +337,14 @@ def build_freestanding_elf(
         "-Wextra",
         "-Werror",
         "-pedantic",
+        *(
+            (
+                "-DBAKENN_CMSIS_NN_FREESTANDING",
+                "-DBAKENN_CMSIS_NN_BUILTIN_MEMORY",
+            )
+            if artifacts.support_sources
+            else ()
+        ),
         *(str(value) for value in extra_flags),
     )
     command = [
@@ -345,6 +354,11 @@ def build_freestanding_elf(
         str(runner),
         "-I",
         str(artifacts.output_dir),
+        *(
+            flag
+            for include_dir in artifacts.support_include_dirs
+            for flag in ("-I", str(include_dir))
+        ),
         "-nostdlib",
         "-Wl,--gc-sections",
         f"-Wl,-Map={map_file}",
