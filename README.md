@@ -68,19 +68,30 @@ the model changes, this provides concrete advantages:
 
 - **No model interpreter or FlatBuffer parser in firmware.** The output is a
   standalone C11 library containing the model and only its selected kernels.
+  On a new 32-bit MCU, the portable fallback can be built with that MCU's C11
+  compiler without first porting TFLM; target-specific optimized kernels are an
+  optional overlay rather than a runtime requirement.
 - **Model-specialized optimization.** Shapes, padding, channels, multipliers,
   buffer addresses and execution order are compile-time constants, enabling
   fusion, liveness-based buffer reuse, packed weights and narrow 1x1, 3x3,
-  depthwise and Linear kernels.
+  depthwise and Linear kernels. Budgeted partial/full unrolling and generic
+  Conv interior/border loop splitting are documented roadmap items, not
+  current performance claims.
 - **Compile-time resource enforcement.** Constant bytes, activation arena,
   scratch and alignment are known before flashing; Flash/SRAM budgets can fail
-  compilation and CI instead of being discovered on the board.
+  compilation and CI instead of being discovered on the board. Product gates
+  such as `Flash <= 256 KiB`, `model SRAM <= 48 KiB`, no heap symbols and
+  `alignment <= 16` can therefore be enforced mechanically. Generated-model
+  and cross-ELF checks do not replace measurement of the final application's
+  stack and unrelated globals.
 - **Direct vendor-kernel calls.** A supported layer can call CMSIS-NN directly
   without retaining TFLM around that kernel. The current direct CMSIS-NN
   adapter covers FullyConnected on ARMv7E-M DSP targets.
 - **Inspectable deployment artifacts.** The generated C function order,
   weights, static offsets, kernel IDs, qparams and manifest can be audited
-  without reconstructing behavior across a FlatBuffer and interpreter.
+  directly. Firmware review does not need to reconstruct the model across a
+  FlatBuffer, interpreter, op resolver, tensor planner and runtime settings,
+  which makes repeatable industrial and safety review materially simpler.
 - **Deterministic failure.** Unsupported operators, unsafe accumulator bounds,
   incompatible qparams and memory-budget violations fail during host
   compilation; there is no target-side floating-point fallback.
@@ -95,27 +106,47 @@ firmware in this repository; they are not hypothetical API comparisons:
   required a matching `.tflite` FlatBuffer, conversion to `model_data.cc`,
   schema compatibility and a separate C++ runner.
 - **Changing the graph:** BakeNN derived the execution order and required
-  kernels from its verified graph. The minimal TFLM runner had to size its
-  `MicroMutableOpResolver` and explicitly register both `AddFullyConnected()`
-  and `AddConv2D()`; omitting the new operator made model setup fail.
+  kernels from its verified graph. The first minimal TFLM runner used
+  `MicroMutableOpResolver<1>` with only `AddFullyConnected()`. Adding Conv2D
+  required changing it to `MicroMutableOpResolver<2>` and registering
+  `AddConv2D()`; otherwise model setup could not find the operator. This was
+  our selective-resolver configuration mistake, not a TFLM kernel bug, but it
+  demonstrates that model changes require the application to keep resolver
+  capacity and registrations synchronized.
+
+  ```text
+  BakeNN graph contains Linear  -> select/emit a Linear kernel
+  BakeNN graph contains Conv2D  -> select/emit a Conv2D kernel
+  operation is unused          -> omit it from the artifact
+  ```
+
 - **Operator-version compatibility:** the pinned Zephyr TFLM accepted Conv2D
-  operator version 2 for this fixture and rejected the other attempted
-  versions. BakeNN has no FlatBuffer operator-version negotiation because it
+  operator version 2 for this fixture; attempted versions 1 and 3 were
+  rejected. BakeNN has no FlatBuffer operator-version negotiation because it
   validates its typed IR before emitting firmware.
 - **Arena sizing:** BakeNN emitted the required 16 B FC arena and 0 B Conv2D
   arena before the target build. TFLM required a caller-chosen arena followed
-  by runtime `AllocateTensors()`; the FC image reserved 1,024 B although the
-  interpreter reported 580 B used, and reducing it close to the reported use
-  did not recreate the graph successfully.
+  by runtime `AllocateTensors()`. Across the checked-in runs, TFLM reported
+  roughly 564--580 B used, but reserving only slightly more than the reported
+  amount did not reliably recreate the graph; the runners reserved 1,024--2,048
+  B instead.
 - **CMSIS-NN integration:** BakeNN's opt-in copied the pinned FC source closure,
   headers, licenses and required compile definitions into the artifact. The
   tested Zephyr TFLM integration required separate CMSIS-NN, CMSIS-Core and
-  TFLM source roots, an old include-path compatibility link, wrapper symbol
-  renaming and a status-enum compatibility definition.
+  TFLM source roots. The older wrapper expected `CMSIS/NN/Include`, so the
+  harness created a compatibility link for the CMSIS-NN v4 layout. Reference
+  and CMSIS wrappers exported colliding registration symbols, so the harness
+  renamed the wrapper symbols locally. It also mapped the wrapper's
+  `ARM_MATH_SUCCESS` name to CMSIS-NN v4's `ARM_CMSIS_NN_SUCCESS`.
 - **Failure location:** BakeNN rejected unsupported semantics and unsafe memory
   at host compile time. The TFLM runner additionally needed target/runtime
   checks for schema version, resolver registration, tensor allocation and
   `Invoke()` failure.
+
+The practical difference was larger than a shorter build command: the TFLM
+path required the developer to assemble a mutually compatible model format,
+operator versions, resolver, runtime and kernel library, while BakeNN analyzed
+the fixed graph and emitted the required execution code and kernel set.
 
 The tradeoff is deliberate: BakeNN currently targets static batch-one,
 fixed-shape models and supports a narrower operator surface. TFLM has broader
