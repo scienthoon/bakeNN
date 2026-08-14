@@ -861,18 +861,22 @@ def _extract_reduce_mean(node: Any, values: dict[str, FloatValue]) -> FloatReduc
     except TypeError as error:
         raise CompileError(f"{node.name}: ReduceMean axes must be static") from error
     keepdims = _literal_bool(_arg(node, 2, False), f"{node.name} keepdim")
-    if not keepdims:
-        raise CompileError(f"{node.name}: ReduceMean v1 requires keepdim=True")
     input_value, output_value = values[input_name], values[node.name]
     rank = len(input_value.shape)
     normalized = tuple(sorted(axis % rank for axis in axes))
     expected_axes = (2, 3) if input_value.layout is FloatLayout.NCHW else (2,) if input_value.layout is FloatLayout.NCL else ()
     if normalized != expected_axes:
         raise CompileError(f"{node.name}: ReduceMean supports NCHW spatial or NCL time axes")
-    expected = tuple(1 if index in normalized else size for index, size in enumerate(input_value.shape))
+    expected = tuple(
+        1 if index in normalized else size
+        for index, size in enumerate(input_value.shape)
+        if keepdims or index not in normalized
+    )
     if output_value.shape != expected:
         raise CompileError(f"{node.name}: ReduceMean output shape is invalid")
-    return FloatReduceMeanOp(node.name, input_name, node.name, axes, True)
+    if not keepdims and output_value.layout is not FloatLayout.NC:
+        raise CompileError(f"{node.name}: reduced spatial/time output must use NC layout")
+    return FloatReduceMeanOp(node.name, input_name, node.name, axes, keepdims)
 
 
 def _extract_resize2d(
@@ -1290,6 +1294,21 @@ def capture_torch_export(
             if str(node.target) in ("aten.dropout.default", "aten.dropout_.default"):
                 _remove_eval_dropout(node, values)
                 continue
+            if str(node.target) == "aten.cat.default":
+                sequence = _arg(node, 0, None)
+                if isinstance(sequence, (tuple, list)) and len(sequence) == 1:
+                    input_name = _tensor_name(sequence[0], values, f"{node.name} input")
+                    if values[node.name].shape != values[input_name].shape:
+                        raise CompileError(
+                            f"{node.name}: single-input Concat must preserve input shape"
+                        )
+                    # torch.cat([x]) is an allocation in eager mode, but its
+                    # tensor values are identical.  The immutable AOT graph can
+                    # safely canonicalize it to an SSA alias and avoid emitting
+                    # a copy-only operation.  DenseNet emits this pattern for
+                    # the first feature list in each dense block.
+                    values[node.name] = values[input_name]
+                    continue
             ops.append(_extract_op(node, values, constants))
             continue
         if node.op == "output":

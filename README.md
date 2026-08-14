@@ -51,7 +51,8 @@ The currently implemented operation families are:
 The image ABI is canonical NHWC and the sequence ABI is canonical NLC. The
 PyTorch frontend accepts NCHW/NCL and converts weights and activations on the
 host. Pad currently supports constant real zero only; ReduceMean supports
-NHWC spatial axes or the NLC time axis with `keepdim=True`. Sigmoid has the
+NHWC spatial axes or the NLC time axis with either `keepdim=True` or a reduced
+NC output. Sigmoid has the
 fixed output qparams `(scale=1/256, zero_point=-128)`. All shapes remain static,
 batch size remains one, and there is still one model input and one model output.
 Resize output sizes are fixed during compilation. Bilinear resize uses the
@@ -67,8 +68,13 @@ Model-level host gates currently cover:
   through FP32 capture, PTQ, planning and C artifact generation;
 - an EfficientNet-Lite-style ReLU6 MBConv classifier, plus torchvision
   EfficientNet-B0 as a harder SiLU/SE-broadcast frontend superset;
+- unmodified torchvision MNASNet0.5 through FP32 capture, PTQ, planning and C
+  artifact generation, including `keepdim=False` global ReduceMean;
 - compact U-Nets using grouped ConvTranspose2D, nearest/bilinear resize or
   static center crop, with skip concatenation and static arena planning.
+- compact ResNet bottleneck, DenseNet-style dense concat, Inception branch,
+  SqueezeNet Fire, Conv1D-flatten classifier, temporal residual and Softmax
+  MLP models through dequantized-accuracy and byte-exact generated-C tests.
 
 The compact models are compiled with GCC and Clang under ASan/UBSan and their C
 outputs are byte-exact with the Python INT8 reference. This is compiler

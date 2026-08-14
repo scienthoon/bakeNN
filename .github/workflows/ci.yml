@@ -71,7 +71,9 @@ jobs:
         target: [esp32, esp32s3, esp32c3]
     steps:
       - uses: actions/checkout@v4
-      - run: python -m pip install .
+      - run: apt-get update
+      - run: apt-get install -y --no-install-recommends python3-pip
+      - run: python -m pip install --break-system-packages .
       - run: >-
           python examples/targets/generate_smoke.py
           --target ${{ matrix.target }}

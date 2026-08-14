@@ -437,21 +437,29 @@ def test_fp32_torch_ptq_to_generated_c_is_bit_exact_and_accurate(
 
 
 @pytest.mark.parametrize(
-    ("factory_name", "required_float_ops"),
+    ("factory_name", "required_float_ops", "minimum_plan_steps"),
     (
         (
             "mobilenet_v3_small",
             {"FloatHardSwishOp", "FloatHardSigmoidOp", "FloatMulOp"},
+            100,
         ),
         (
             "mobilenet_v3_large",
             {"FloatHardSwishOp", "FloatHardSigmoidOp", "FloatMulOp"},
+            100,
         ),
         (
             # torchvision does not ship Google's Lite checkpoint.  B0 is a
             # semantic superset here because it retains SiLU and SE broadcast.
             "efficientnet_b0",
             {"FloatSiLUOp", "FloatSigmoidOp", "FloatMulOp"},
+            100,
+        ),
+        (
+            "mnasnet0_5",
+            {"FloatDepthwiseConv2DOp", "FloatAddOp", "FloatReduceMeanOp"},
+            60,
         ),
     ),
 )
@@ -459,6 +467,7 @@ def test_unmodified_torchvision_backbone_reaches_generated_c(
     tmp_path: Path,
     factory_name: str,
     required_float_ops: set[str],
+    minimum_plan_steps: int,
 ) -> None:
     try:
         import torchvision.models as models
@@ -477,6 +486,6 @@ def test_unmodified_torchvision_backbone_reaches_generated_c(
     )
     captured = {type(op).__name__ for op in compiled.float_graph.ops}
     assert required_float_ops <= captured
-    assert len(compiled.plan.steps) >= 100
+    assert len(compiled.plan.steps) >= minimum_plan_steps
     assert compiled.artifacts.model_source.stat().st_size > 0
     assert compiled.artifacts.weights_source.stat().st_size > 0

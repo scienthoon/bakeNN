@@ -951,7 +951,7 @@ def quantize_float_graph(
         elif isinstance(op, FloatReduceMeanOp):
             input_layout = graph.values[op.input].layout
             axes = (1, 2) if input_layout is FloatLayout.NCHW else (1,)
-            operations.append(ReduceMeanOp(op.name, op.input, op.output, axes, True))
+            operations.append(ReduceMeanOp(op.name, op.input, op.output, axes, op.keepdims))
         elif isinstance(op, FloatResizeNearest2DOp):
             operations.append(ResizeNearest2DOp(op.name, op.input, op.output))
         elif isinstance(op, FloatResizeBilinear2DOp):
@@ -1008,8 +1008,16 @@ def quantize_float_graph(
                             f"{op.name}: NCL-to-NCHW Unsqueeze requires one singleton spatial axis"
                         )
                 elif output_float.layout is FloatLayout.NC:
-                    if input_float.shape[2] != 1:
-                        raise CompileError(f"{op.name}: NCL-to-NC Squeeze requires length one")
+                    consumers = consumer_map.get(op.output, ())
+                    if len(consumers) != 1 or not isinstance(consumers[0], FloatLinearOp):
+                        raise CompileError(
+                            f"{op.name}: NCL-to-NC view is supported only when consumed by one "
+                            "Linear; canonical NLC flatten order otherwise changes semantics"
+                        )
+                    _, channels, length = input_float.shape
+                    flattened_permutations[op.output] = np.arange(
+                        channels * length, dtype=np.int64
+                    ).reshape(channels, length).transpose(1, 0).reshape(-1)
                 elif output_float.layout is not FloatLayout.NCL or input_float.shape != output_float.shape:
                     raise CompileError(
                         f"{op.name}: general NCL Reshape changes NLC canonical order"

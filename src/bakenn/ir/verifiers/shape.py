@@ -45,8 +45,8 @@ def _verify_view(op: ReshapeOp | FlattenOp, graph: QuantizedGraph) -> None:
     if input_type.numel != output_type.numel:
         _fail(op, "view operations must preserve the number of elements")
     if isinstance(op, FlattenOp):
-        if input_type.layout is not Layout.NHWC or output_type.layout is not Layout.NC:
-            _fail(op, "Flatten requires NHWC input and NC output")
+        if input_type.layout not in (Layout.NHWC, Layout.NLC) or output_type.layout is not Layout.NC:
+            _fail(op, "Flatten requires NHWC or NLC input and NC output")
         if output_type.shape != (1, prod(input_type.shape[1:])):
             _fail(op, "Flatten output must contain all non-batch input elements")
 

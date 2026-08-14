@@ -48,8 +48,6 @@ def _verify_pad2d(op: Pad2DOp, graph: QuantizedGraph) -> None:
 @verify_op.register
 def _verify_reduce_mean(op: ReduceMeanOp, graph: QuantizedGraph) -> None:
     input_type, output_type = _activation_pair(op, graph)
-    if not op.keepdims:
-        raise GraphValidationError(f"{op.name}: ReduceMean v1 requires keepdims=True")
     rank = len(input_type.shape)
     axes = tuple(sorted({axis % rank for axis in op.axes}))
     if len(axes) != len(op.axes):
@@ -60,9 +58,14 @@ def _verify_reduce_mean(op: ReduceMeanOp, graph: QuantizedGraph) -> None:
         expected_axes = (1,)
     else:
         raise GraphValidationError(f"{op.name}: ReduceMean supports NHWC spatial or NLC time axes")
-    if axes != expected_axes or output_type.layout is not input_type.layout:
+    expected_layout = input_type.layout if op.keepdims else Layout.NC
+    if axes != expected_axes or output_type.layout is not expected_layout:
         raise GraphValidationError(f"{op.name}: unsupported ReduceMean axes/layout combination")
-    expected_shape = tuple(1 if index in axes else value for index, value in enumerate(input_type.shape))
+    expected_shape = tuple(
+        1 if index in axes else value
+        for index, value in enumerate(input_type.shape)
+        if op.keepdims or index not in axes
+    )
     if output_type.shape != expected_shape:
         raise GraphValidationError(f"{op.name}: ReduceMean output shape must be {expected_shape}")
     count = prod(input_type.shape[index] for index in axes)

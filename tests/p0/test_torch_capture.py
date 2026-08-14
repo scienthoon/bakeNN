@@ -147,6 +147,15 @@ class TorchExportCaptureTests(unittest.TestCase):
         self.assertEqual(concat.inputs, (graph.inputs[0], graph.inputs[0]))
         self.assertEqual(reshape.target_shape, (1, 48))
 
+    def test_single_input_cat_is_canonicalized_to_an_identity_edge(self) -> None:
+        class SingleCat(nn.Module):
+            def forward(self, x):  # type: ignore[no-untyped-def]
+                return torch.cat([x], dim=1).relu()
+
+        graph = capture_torch_export(SingleCat().eval(), torch.randn(1, 2, 3, 4))
+        self.assertEqual(tuple(type(op) for op in graph.ops), (FloatReLUOp,))
+        self.assertEqual(graph.ops[0].input, graph.inputs[0])
+
     def test_eval_conv_batchnorm_relu_is_folded_into_new_immutable_constants(self) -> None:
         conv = nn.Conv2d(2, 2, 1, bias=True)
         batch_norm = nn.BatchNorm2d(2, eps=0.25)
