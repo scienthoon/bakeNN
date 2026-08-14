@@ -79,9 +79,11 @@ jobs:
           --target ${{ matrix.target }}
           --output /tmp/bakenn-${{ matrix.target }}
           --esp-idf
-      - run: idf.py set-target ${{ matrix.target }}
+      - name: Build ESP-IDF project
+        shell: bash
         working-directory: /tmp/bakenn-${{ matrix.target }}/esp_idf
-      - run: idf.py build
-        working-directory: /tmp/bakenn-${{ matrix.target }}/esp_idf
-      - run: idf.py size-components
-        working-directory: /tmp/bakenn-${{ matrix.target }}/esp_idf
+        run: |
+          . /opt/esp/idf/export.sh
+          idf.py set-target "${{ matrix.target }}"
+          idf.py build
+          idf.py size-components
