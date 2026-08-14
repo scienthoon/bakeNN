@@ -85,6 +85,38 @@ the model changes, this provides concrete advantages:
   incompatible qparams and memory-budget violations fail during host
   compilation; there is no target-side floating-point fallback.
 
+### What was easier in the checked-in board comparison
+
+These differences were observed while building and running the FC and Conv2D
+firmware in this repository; they are not hypothetical API comparisons:
+
+- **Model packaging:** BakeNN compilation emitted the model C, weights,
+  selected kernels, manifest and CMake source list together. The TFLM path
+  required a matching `.tflite` FlatBuffer, conversion to `model_data.cc`,
+  schema compatibility and a separate C++ runner.
+- **Changing the graph:** BakeNN derived the execution order and required
+  kernels from its verified graph. The minimal TFLM runner had to size its
+  `MicroMutableOpResolver` and explicitly register both `AddFullyConnected()`
+  and `AddConv2D()`; omitting the new operator made model setup fail.
+- **Operator-version compatibility:** the pinned Zephyr TFLM accepted Conv2D
+  operator version 2 for this fixture and rejected the other attempted
+  versions. BakeNN has no FlatBuffer operator-version negotiation because it
+  validates its typed IR before emitting firmware.
+- **Arena sizing:** BakeNN emitted the required 16 B FC arena and 0 B Conv2D
+  arena before the target build. TFLM required a caller-chosen arena followed
+  by runtime `AllocateTensors()`; the FC image reserved 1,024 B although the
+  interpreter reported 580 B used, and reducing it close to the reported use
+  did not recreate the graph successfully.
+- **CMSIS-NN integration:** BakeNN's opt-in copied the pinned FC source closure,
+  headers, licenses and required compile definitions into the artifact. The
+  tested Zephyr TFLM integration required separate CMSIS-NN, CMSIS-Core and
+  TFLM source roots, an old include-path compatibility link, wrapper symbol
+  renaming and a status-enum compatibility definition.
+- **Failure location:** BakeNN rejected unsupported semantics and unsafe memory
+  at host compile time. The TFLM runner additionally needed target/runtime
+  checks for schema version, resolver registration, tensor allocation and
+  `Invoke()` failure.
+
 The tradeoff is deliberate: BakeNN currently targets static batch-one,
 fixed-shape models and supports a narrower operator surface. TFLM has broader
 operator coverage and is preferable when one firmware runtime must accept
