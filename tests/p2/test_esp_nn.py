@@ -386,7 +386,7 @@ def test_esp_nn_bundle_and_esp_idf_project_are_pinned_and_self_contained(
         target=ESP32_S3,
     )
     artifacts = compiled.artifacts
-    assert len(artifacts.support_sources) == 21
+    assert len(artifacts.support_sources) == 22
     assert len(artifacts.support_include_dirs) == 2
     assert len(artifacts.third_party_licenses) == 1
     manifest = json.loads(artifacts.manifest.read_text(encoding="utf-8"))
@@ -413,6 +413,7 @@ def test_esp_nn_bundle_and_esp_idf_project_are_pinned_and_self_contained(
     assert "CONFIG_IDF_TARGET_ESP32S3=1" in component_cmake
     assert "CONFIG_NN_SKIP_NUDGE" not in component_cmake
     assert "esp_nn_conv_esp32s3.c" in component_cmake
+    assert "esp_nn_depthwise_conv_opt.c" in component_cmake
     assert "esp_nn_conv_s8_mult8_1x1_esp32s3.S" in component_cmake
     assert (project.component / "third_party/esp_nn/include/esp_nn.h").is_file()
     assert (project.component / "third_party/esp_nn/LICENSE").is_file()

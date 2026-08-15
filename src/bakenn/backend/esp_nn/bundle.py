@@ -43,6 +43,9 @@ _ESP32S3_SOURCES_BY_FAMILY = {
         "src/convolution/esp_nn_conv_s8_filter_aligned_input_padded_esp32s3.S",
     ),
     "depthwise": (
+        # The S3 kernel falls back to this implementation for unsupported
+        # channel/window combinations, so it is part of the target closure.
+        "src/convolution/esp_nn_depthwise_conv_opt.c",
         "src/convolution/esp_nn_depthwise_conv_s8_esp32s3.c",
         "src/convolution/esp_nn_depthwise_conv_s8_mult1_3x3_padded_esp32s3.S",
         "src/convolution/esp_nn_depthwise_conv_s16_mult1_esp32s3.S",
@@ -128,8 +131,8 @@ def bundle_kernels(
         base_sources = _BASE_SOURCES_BY_FAMILY[family]
         if target_id == "esp32s3":
             # S3 dispatches directly to its target implementation. Keep the
-            # ANSI source as the host differential oracle, but omit the
-            # generic opt dispatcher and every unrelated operator family.
+            # ANSI source as the host differential oracle and let the exact
+            # family closure below add any target-internal fallback source.
             base_sources = tuple(
                 value for value in base_sources if not value.endswith("_opt.c")
             )
