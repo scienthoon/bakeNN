@@ -1,5 +1,9 @@
 # BakeNN
 
+[![CI](https://github.com/scienthoon/bakeNN/actions/workflows/ci.yml/badge.svg)](https://github.com/scienthoon/bakeNN/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
+
 BakeNN is a new, independent INT8 AOT compiler core for fixed-model MCU
 products. It converts an already-trained FP32 model plus representative
 calibration data into a model-specialized, heap-free standalone C11 library.

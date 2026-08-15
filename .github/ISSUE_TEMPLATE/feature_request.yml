@@ -1,0 +1,45 @@
+name: Operator or target request
+description: Propose a scoped model semantic, operator, backend or target addition.
+title: "[Request]: "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Request type
+      options:
+        - Operator or model semantic
+        - Target/toolchain
+        - Optimized kernel
+        - Frontend capture
+        - Documentation or tooling
+    validations:
+      required: true
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Fixed-model MCU use case
+      description: Name the model family, static shapes and intended MCU/toolchain.
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Required semantics
+      description: Quantization, layouts, padding/stride, broadcast, scratch and fallback requirements.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Reproducer or evidence
+      description: Minimal PyTorch module, exported target name, vendor API or benchmark protocol.
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope confirmation
+      options:
+        - label: This can preserve fixed shapes, batch one and the single-input/output public ABI.
+          required: true
