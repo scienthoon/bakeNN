@@ -37,13 +37,19 @@ extern "C" {
 #endif
 
 #include <limits.h>
+#include <stddef.h>
 #include <stdint.h>
 #if defined(BAKENN_CMSIS_NN_FREESTANDING)
 #else
 #include <float.h>
 #include <math.h>
 #endif
-#if defined(BAKENN_CMSIS_NN_FREESTANDING) || defined(BAKENN_CMSIS_NN_BUILTIN_MEMORY)
+#if defined(BAKENN_CMSIS_NN_FREESTANDING)
+void *bakenn_cmsis_memcpy(void *destination, const void *source, size_t size);
+void *bakenn_cmsis_memset(void *destination, int value, size_t size);
+#define memcpy bakenn_cmsis_memcpy
+#define memset bakenn_cmsis_memset
+#elif defined(BAKENN_CMSIS_NN_BUILTIN_MEMORY)
 #define memcpy __builtin_memcpy
 #define memset __builtin_memset
 #else

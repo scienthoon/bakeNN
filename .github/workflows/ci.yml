@@ -78,6 +78,7 @@ jobs:
           python examples/targets/generate_smoke.py
           --target ${{ matrix.target }}
           --output /tmp/bakenn-${{ matrix.target }}
+          --esp-nn
           --esp-idf
       - name: Build ESP-IDF project
         shell: bash

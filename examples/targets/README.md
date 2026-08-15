@@ -21,7 +21,7 @@ Generate an ESP-IDF project without a board:
 
 ```bash
 PYTHONPATH=src python examples/targets/generate_smoke.py \
-  --target esp32s3 --output build/esp32s3 --esp-idf
+  --target esp32s3 --output build/esp32s3 --esp-nn --esp-idf
 cd build/esp32s3/esp_idf
 idf.py set-target esp32s3
 idf.py build
@@ -32,6 +32,14 @@ The ESP runner calls the model once and, when flashed later, prints the cycle
 counter, FreeRTOS stack high-water mark, arena size, and output bytes.  An
 ESP-IDF build proves source/toolchain/link compatibility only; it does not prove
 latency, energy, cache behaviour, or physical peak stack usage.
+
+`--esp-nn` enables the pinned, direct ESP-NN source backend. On ESP32-S3 the
+smoke graph selects its Conv2D and DepthwiseConv2D SIMD implementations; on the
+original ESP32 it selects Espressif's optimized generic Conv/Depthwise C. The
+same command for ESP32-C3 proves deterministic BakeNN fallback because the
+pinned ESP-NN release does not implement that target. The generated component
+contains the required source closure, headers and license, so neither TFLM nor
+an online component-manager fetch is required.
 
 Generate an IoT-LAB nRF52840DK Zephyr benchmark project:
 

@@ -49,7 +49,7 @@ def export_esp_idf_component(
     target: str | TargetDescriptor,
     output_dir: str | Path,
 ) -> Path:
-    """Package generated model sources as a dependency-free ESP-IDF component."""
+    """Package generated model and pinned support sources as an ESP-IDF component."""
 
     descriptor, _ = _require_esp_target(artifacts, target)
     del descriptor
@@ -66,16 +66,69 @@ def export_esp_idf_component(
     )
     for source in files:
         shutil.copy2(source, output / source.name)
-    source_names = (
+    generated_source_names = (
         artifacts.model_source.name,
         artifacts.weights_source.name,
         artifacts.kernels_source.name,
     )
-    cmake_sources = " ".join(f'"{name}"' for name in source_names)
+    support_source_names: list[str] = []
+    for source in (*artifacts.support_sources, *artifacts.third_party_licenses):
+        try:
+            relative = source.relative_to(artifacts.output_dir)
+        except ValueError as error:
+            raise CompileError(
+                f"support file is outside the generated artifact: {source}"
+            ) from error
+        destination = output / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        if source in artifacts.support_sources:
+            support_source_names.append(relative.as_posix())
+    include_names = ["."]
+    for include_dir in artifacts.support_include_dirs:
+        try:
+            relative = include_dir.relative_to(artifacts.output_dir)
+        except ValueError as error:
+            raise CompileError(
+                f"support include directory is outside the generated artifact: {include_dir}"
+            ) from error
+        include_names.append(relative.as_posix())
+        shutil.copytree(include_dir, output / relative, dirs_exist_ok=True)
+
+    cmake_sources = " ".join(
+        f'"{name}"' for name in (*generated_source_names, *support_source_names)
+    )
+    cmake_includes = " ".join(f'"{name}"' for name in include_names)
+    strict_generated = " ".join(f'"{name}"' for name in generated_source_names)
+    manifest = _load_manifest(artifacts)
+    dependencies = manifest.get("bundled_dependencies", [])
+    has_esp_nn = any(
+        isinstance(item, dict) and item.get("name") == "ESP-NN"
+        for item in dependencies
+    )
+    definitions = (
+        "target_compile_definitions(${COMPONENT_LIB} PRIVATE CONFIG_NN_OPTIMIZED=1)\n"
+        if has_esp_nn
+        else ""
+    )
+    target_options = (
+        "if(CONFIG_IDF_TARGET_ESP32S3)\n"
+        "  target_compile_options(${COMPONENT_LIB} PRIVATE -mlongcalls "
+        "-fno-unroll-loops -O2 -Wno-unused-function)\n"
+        "else()\n"
+        "  target_compile_options(${COMPONENT_LIB} PRIVATE -O2 -Wno-unused-function)\n"
+        "endif()\n"
+        if has_esp_nn
+        else ""
+    )
     (output / "CMakeLists.txt").write_text(
-        f"idf_component_register(SRCS {cmake_sources} INCLUDE_DIRS \".\")\n"
+        f"idf_component_register(SRCS {cmake_sources} INCLUDE_DIRS {cmake_includes})\n"
         "target_compile_options(${COMPONENT_LIB} PRIVATE "
-        "-std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections)\n",
+        "-std=c11 -ffunction-sections -fdata-sections)\n"
+        f"set_source_files_properties({strict_generated} PROPERTIES "
+        'COMPILE_OPTIONS "-Wall;-Wextra;-Werror;-pedantic")\n'
+        + definitions
+        + target_options,
         encoding="utf-8",
     )
     return output

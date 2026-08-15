@@ -56,7 +56,9 @@ ESP32 = TargetDescriptor(
     cpu="xtensa-lx6",
     abi="esp-idf",
     toolchain="esp-idf",
-    features=frozenset({"scalar-int8", "xtensa", "external-flash"}),
+    features=frozenset(
+        {"scalar-int8", "xtensa", "external-flash", "esp-nn-generic-opt"}
+    ),
     arena_alignment=4,
     constant_alignment=4,
     metadata={"idf_target": "esp32"},
@@ -69,7 +71,14 @@ ESP32_S3 = TargetDescriptor(
     abi="esp-idf",
     toolchain="esp-idf",
     features=frozenset(
-        {"scalar-int8", "xtensa", "esp-vector-int8", "external-flash", "optional-psram"}
+        {
+            "scalar-int8",
+            "xtensa",
+            "esp-vector-int8",
+            "esp-nn-simd",
+            "external-flash",
+            "optional-psram",
+        }
     ),
     arena_alignment=16,
     constant_alignment=16,

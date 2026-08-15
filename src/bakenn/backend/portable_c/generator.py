@@ -7,12 +7,14 @@ from pathlib import Path
 import numpy as np
 
 from bakenn._version import VERSION
-from bakenn.backend.cmsis_nn import bundle_fully_connected
+from bakenn.backend.cmsis_nn import bundle_kernels
 from bakenn.backend.cmsis_nn.bundle import (
     CMSIS_CORE_VERSION,
     CMSIS_NN_REVISION,
     CMSIS_NN_VERSION,
 )
+from bakenn.backend.esp_nn import bundle_kernels as bundle_esp_nn_kernels
+from bakenn.backend.esp_nn.bundle import ESP_NN_REVISION, ESP_NN_VERSION
 from bakenn.errors import CompileError
 from bakenn.ir import PerTensorQParams
 from bakenn.ir.types import TARGET_SIZE_MAX
@@ -80,11 +82,28 @@ def generate_portable_c(
         raise CompileError("model name cannot be converted into a C identifier")
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    cmsis_selected = any(
-        selection.kernel_id.startswith("cmsis_nn.")
+    cmsis_kernel_ids = tuple(
+        selection.kernel_id
         for selection in backend_plan.selections
+        if selection.kernel_id.startswith("cmsis_nn.")
     )
-    cmsis_bundle = bundle_fully_connected(output) if cmsis_selected else None
+    cmsis_bundle = (
+        bundle_kernels(output, cmsis_kernel_ids) if cmsis_kernel_ids else None
+    )
+    esp_nn_kernel_ids = tuple(
+        selection.kernel_id
+        for selection in backend_plan.selections
+        if selection.kernel_id.startswith("esp_nn.")
+    )
+    esp_nn_bundle = (
+        bundle_esp_nn_kernels(
+            output,
+            esp_nn_kernel_ids,
+            backend_plan.options.target.target_id,
+        )
+        if esp_nn_kernel_ids
+        else None
+    )
 
     input_type = plan.tensors[plan.inputs[0]].tensor_type
     output_type = plan.tensors[plan.outputs[0]].tensor_type
@@ -324,6 +343,7 @@ void {symbol}_infer(
             "kernel_policy": backend_plan.options.kernel_policy.value,
             "weight_packing": backend_plan.options.enable_weight_packing,
             "cmsis_nn_enabled": backend_plan.options.enable_cmsis_nn,
+            "esp_nn_enabled": backend_plan.options.enable_esp_nn,
             "optimized_steps": sum(item.optimized for item in backend_plan.selections),
             "selections": kernel_selections,
         },
@@ -350,8 +370,9 @@ void {symbol}_infer(
         },
         "operations": operations,
     }
+    bundled_dependencies: list[dict[str, object]] = []
     if cmsis_bundle is not None:
-        manifest_data["bundled_dependencies"] = [
+        bundled_dependencies.append(
             {
                 "name": "CMSIS-NN",
                 "version": CMSIS_NN_VERSION,
@@ -360,6 +381,9 @@ void {symbol}_infer(
                 "compatibility_patches": [
                     "BAKENN_CMSIS_NN_FREESTANDING suppresses unused hosted headers",
                     "BAKENN_CMSIS_NN_BUILTIN_MEMORY preserves fixed-width DSP loads",
+                    "freestanding memory calls use bundled namespaced byte-loop shims",
+                    "Clang excludes the GCC-only no-unroll optimize attribute",
+                    "unused hosted stdio includes are removed from 1x1 Conv sources",
                 ],
                 "sources": [
                     path.relative_to(output).as_posix()
@@ -374,12 +398,48 @@ void {symbol}_infer(
                     for path in cmsis_bundle.license_files
                 ],
             }
-        ]
+        )
+    if esp_nn_bundle is not None:
+        bundled_dependencies.append(
+            {
+                "name": "ESP-NN",
+                "version": ESP_NN_VERSION,
+                "revision": ESP_NN_REVISION,
+                "target": esp_nn_bundle.target_id,
+                "requantization": {
+                    "profile": "TFLM-compatible double rounding",
+                    "CONFIG_NN_SKIP_NUDGE": False,
+                },
+                "sources": [
+                    path.relative_to(output).as_posix()
+                    for path in esp_nn_bundle.sources
+                ],
+                "include_dirs": [
+                    path.relative_to(output).as_posix()
+                    for path in esp_nn_bundle.include_dirs
+                ],
+                "licenses": [
+                    path.relative_to(output).as_posix()
+                    for path in esp_nn_bundle.license_files
+                ],
+            }
+        )
+    if bundled_dependencies:
+        manifest_data["bundled_dependencies"] = bundled_dependencies
     manifest.write_text(json.dumps(manifest_data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    support_sources = () if cmsis_bundle is None else cmsis_bundle.sources
-    support_include_dirs = () if cmsis_bundle is None else cmsis_bundle.include_dirs
-    third_party_licenses = () if cmsis_bundle is None else cmsis_bundle.license_files
+    support_sources = (
+        (() if cmsis_bundle is None else cmsis_bundle.sources)
+        + (() if esp_nn_bundle is None else esp_nn_bundle.sources)
+    )
+    support_include_dirs = (
+        (() if cmsis_bundle is None else cmsis_bundle.include_dirs)
+        + (() if esp_nn_bundle is None else esp_nn_bundle.include_dirs)
+    )
+    third_party_licenses = (
+        (() if cmsis_bundle is None else cmsis_bundle.license_files)
+        + (() if esp_nn_bundle is None else esp_nn_bundle.license_files)
+    )
     cmake_sources = (
         model_source,
         weights_source,
@@ -405,6 +465,11 @@ void {symbol}_infer(
         + (
             "  BAKENN_CMSIS_NN_BUILTIN_MEMORY\n"
             if cmsis_bundle is not None
+            else ""
+        )
+        + (
+            "  CONFIG_NN_OPTIMIZED=1\n"
+            if esp_nn_bundle is not None
             else ""
         )
         + ")\n",

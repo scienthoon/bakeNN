@@ -22,11 +22,21 @@ where = ["src"]
 [tool.setuptools.package-data]
 "bakenn.backend.cmsis_nn.vendor" = [
   "cmsis_nn/Include/*.h",
+  "cmsis_nn/Source/ConvolutionFunctions/*.c",
   "cmsis_nn/Source/FullyConnectedFunctions/*.c",
   "cmsis_nn/Source/NNSupportFunctions/*.c",
+  "cmsis_nn/Source/PoolingFunctions/*.c",
   "cmsis_nn/LICENSE.txt",
   "cmsis_core/Include/*.h",
   "cmsis_core/LICENSE.txt",
+]
+"bakenn.backend.esp_nn.vendor" = [
+  "esp_nn/include/*.h",
+  "esp_nn/src/*/*.h",
+  "esp_nn/src/*/*.c",
+  "esp_nn/src/*/*.S",
+  "esp_nn/LICENSE",
+  "esp_nn/BAKENN_PROVENANCE.md",
 ]
 
 [tool.setuptools.dynamic]
