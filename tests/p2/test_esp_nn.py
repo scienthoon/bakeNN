@@ -386,7 +386,7 @@ def test_esp_nn_bundle_and_esp_idf_project_are_pinned_and_self_contained(
         target=ESP32_S3,
     )
     artifacts = compiled.artifacts
-    assert len(artifacts.support_sources) == 48
+    assert len(artifacts.support_sources) == 21
     assert len(artifacts.support_include_dirs) == 2
     assert len(artifacts.third_party_licenses) == 1
     manifest = json.loads(artifacts.manifest.read_text(encoding="utf-8"))
