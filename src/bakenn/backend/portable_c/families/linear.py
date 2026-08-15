@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 
+from bakenn.backend.esp_nn.integration import (
+    ESP_NN_LINEAR_IDS,
+    linear_capability as esp_nn_linear_capability,
+    linear_emission as esp_nn_linear_emission,
+)
 from bakenn.errors import CompileError
 from bakenn.ir import PerTensorQParams
 from bakenn.plan import ExecutionPlan, LinearStep
@@ -467,6 +472,7 @@ def _linear_capabilities(
         )
 
     return (
+        esp_nn_linear_capability(step, plan, options),
         cmsis_nn_capability(),
         cortex_m4_capability(),
         pair_capability(),
@@ -500,6 +506,8 @@ def _emit_linear(step: LinearStep, context: StepEmitContext) -> StepEmission:
     elif implementation == _CMSIS_NN_ID:
         kernel_fn = f"{context.symbol}_linear_cmsis_nn_s8"
         selected_kernel = _cmsis_nn_kernel(context)
+    elif implementation in ESP_NN_LINEAR_IDS.values():
+        selected_kernel = None
     else:
         raise CompileError(f"unsupported Linear C implementation {implementation}")
 
@@ -517,6 +525,17 @@ def _emit_linear(step: LinearStep, context: StepEmitContext) -> StepEmission:
             f"        {step.multipliers[0]}, {step.shifts[0]},\n"
             f"        {step.activation_min}, {step.activation_max});"
         )
+    elif implementation in ESP_NN_LINEAR_IDS.values():
+        multiplier_symbol = f"{context.symbol}_op{context.step_index}_multiplier"
+        shift_symbol = f"{context.symbol}_op{context.step_index}_shift"
+        constants = (
+            _int32_constant(multiplier_symbol, step.multipliers),
+            _int32_constant(shift_symbol, step.shifts),
+        )
+        selected_kernel, call = esp_nn_linear_emission(
+            step, context, multiplier_symbol, shift_symbol
+        )
+        kernels = (selected_kernel,)
     else:
         multiplier_symbol = f"{context.symbol}_op{context.step_index}_multiplier"
         shift_symbol = f"{context.symbol}_op{context.step_index}_shift"

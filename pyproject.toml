@@ -10,10 +10,27 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-dependencies = ["numpy>=1.24"]
+keywords = ["int8", "aot-compiler", "microcontroller", "pytorch", "embedded-ml"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Compilers",
+]
+dependencies = ["numpy>=1.24,<3"]
+
+[project.urls]
+Homepage = "https://github.com/scienthoon/bakeNN"
+Repository = "https://github.com/scienthoon/bakeNN.git"
+Issues = "https://github.com/scienthoon/bakeNN/issues"
+Changelog = "https://github.com/scienthoon/bakeNN/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-torch = ["torch>=2.3"]
+torch = ["torch>=2.3,<2.11"]
 test = ["pytest>=8"]
 
 [tool.setuptools.packages.find]
@@ -22,11 +39,21 @@ where = ["src"]
 [tool.setuptools.package-data]
 "bakenn.backend.cmsis_nn.vendor" = [
   "cmsis_nn/Include/*.h",
+  "cmsis_nn/Source/ConvolutionFunctions/*.c",
   "cmsis_nn/Source/FullyConnectedFunctions/*.c",
   "cmsis_nn/Source/NNSupportFunctions/*.c",
+  "cmsis_nn/Source/PoolingFunctions/*.c",
   "cmsis_nn/LICENSE.txt",
   "cmsis_core/Include/*.h",
   "cmsis_core/LICENSE.txt",
+]
+"bakenn.backend.esp_nn.vendor" = [
+  "esp_nn/include/*.h",
+  "esp_nn/src/*/*.h",
+  "esp_nn/src/*/*.c",
+  "esp_nn/src/*/*.S",
+  "esp_nn/LICENSE",
+  "esp_nn/BAKENN_PROVENANCE.md",
 ]
 
 [tool.setuptools.dynamic]

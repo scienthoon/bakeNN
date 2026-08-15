@@ -245,12 +245,13 @@ def test_cmsis_nn_fc_bundle_is_pinned_self_contained_and_deterministic(
         backend_options=_options(),
         target=CORTEX_M4,
     )
-    assert len(first.artifacts.support_sources) == 2
+    assert len(first.artifacts.support_sources) == 3
     assert len(first.artifacts.support_include_dirs) == 2
     assert len(first.artifacts.third_party_licenses) == 2
     assert all(path.is_file() for path in first.artifacts.support_sources)
     assert all(path.is_file() for path in first.artifacts.third_party_licenses)
     build_fragment = first.artifacts.build_fragment.read_text(encoding="utf-8")
+    assert "bakenn_cmsis_memory.c" in build_fragment
     assert "arm_fully_connected_s8.c" in build_fragment
     assert "BAKENN_MODEL_COMPILE_DEFINITIONS" in build_fragment
     assert "BAKENN_CMSIS_NN_BUILTIN_MEMORY" in build_fragment

@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a reproducible compiler, numerical or generated-code defect.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Security vulnerabilities must be reported privately through the Security tab.
+  - type: input
+    id: version
+    attributes:
+      label: BakeNN revision/version
+      placeholder: v0.1.0 or git SHA
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Host and target environment
+      description: Python, PyTorch, OS, C/cross compiler, MCU/board and flags.
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: Include the smallest model/graph, static input shape and calibration construction.
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Include the full CompileError or expected/actual INT8 bytes.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I verified that this is not an intentional static batch-one/single-I/O constraint.
+          required: true
+        - label: I removed private model data and secrets from the reproducer.
+          required: true

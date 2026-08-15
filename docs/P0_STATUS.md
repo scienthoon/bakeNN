@@ -17,7 +17,7 @@ does not imply that BakeNN is faster or smaller than TFLM.
 | Pool, tensor, shape and output | Implemented and host-tested | 2D/1D Avg/MaxPool, zero Pad2D, spatial/time ReduceMean with retained or removed reduced dimensions, NHWC/NLC Flatten and Reshape/Squeeze/Unsqueeze views, static Slice/Crop, Concatenate, static nearest/Q15-bilinear Resize2D, and BakeNN Q15-LUT Softmax. Softmax is explicitly not TFLite bit-exact. |
 | Static memory plan | Implemented and host-tested | Multi-input liveness, reuse, view/in-place safety and shared scratch planning. Physical-target stack usage is not inferred by this planner. |
 | Portable C11 emission | Implemented and host-tested | Heap-free generated artifacts, strict compiler and sanitizer coverage, Python/C integer differential tests. |
-| P2 kernel selection and packing | Generic and first target slice implemented | Deterministic policy/capability overlay, immutable versioned packed constants, exact source/override checks, scratch/resource bounds, decision manifest and portable fallback. Cortex-M4 Linear/Conv kernels use real SMLAD intrinsics and cross-link cleanly. Direct bundled CMSIS-NN FC is available as an opt-in. |
+| P2 kernel selection and packing | Generic and target overlays implemented | Deterministic policy/capability overlay, immutable versioned packed constants, exact source/override checks, scratch/resource bounds, decision manifest and portable fallback. Cortex-M4 Linear/Conv kernels use real SMLAD intrinsics and cross-link cleanly. Direct pinned CMSIS-NN v4 adapters cover FC, Conv2D, DepthwiseConv2D, AveragePool2D and MaxPool2D. Pinned ESP-NN 1.2.6 covers S3 Conv/Depthwise/FC/pool and original ESP32 optimized Conv/Depthwise as an opt-in. Both vendor backends place required scratch in the static arena. |
 | PyTorch capture | Implemented for the declared extended surface | Lazy `torch.export`; static batch one NCHW/NCL; grouped 2D/1D Conv and ConvTranspose2D, static Slice/Crop, HardSigmoid/HardSwish/SiLU, static broadcast, resize, pad, mean, pool and shape surfaces; eval BN2D/BN1D folding; Dropout/Identity removal; safe in-place surfaces normalized after mutation/fan-out checks. |
 | PTQ | Implemented for declared graph surface | Deterministic min/max observation, per-tensor activation and per-channel weight quantization. No QAT in P0. |
 | Representative quantized fixtures | Implemented | Hand-built TinyCNN, residual DS-CNN and MobileNetV1-style graphs exercise whole QuantizedGraph-to-C paths. |
@@ -26,7 +26,7 @@ does not imply that BakeNN is faster or smaller than TFLM.
 | Constant-channel / degenerate-range handling | Implemented and host-tested | Zero dynamic range uses scale=1/zp=0. Zero-weight/nonzero-bias channels use an explicit output-domain scale/bias policy and exact v1 replay proof; the channel is retained rather than falsely reported as folded away. |
 | Generated resource manifest | Partially implemented | Reports constants, activation arena, scratch, I/O, layout, qparams and alignment; must still be reconciled with final target ELF/map and stack measurements. |
 | Target descriptors and cross-link | Implemented and host-tested | Versioned portable32, Cortex-M0+/M4, RV32IMC and ESP profiles. ARM/RISC-V freestanding ELF/map and symbol audits pass with real GNU embedded toolchains; Cortex-M4 disassembly contains the selected SMLAD instructions. Physical nRF52840 evidence is recorded for the FC and standalone Conv benchmark only. |
-| ESP-IDF packaging | Implemented; boardless CI encoded | Self-contained component/project and cycle/stack/output runner for ESP32/S3/C3. Local ESP-IDF and physical-board execution remain unverified. |
+| ESP-IDF packaging | Implemented; boardless CI encoded | Self-contained component/project and cycle/stack/output runner for ESP32/S3/C3. CI builds the ESP-NN Conv/Depthwise smoke on ESP32/S3 and the deterministic fallback on C3. Host tests execute original ESP32 optimized C and use the official ANSI oracle for S3 wrappers; physical ESP execution remains unverified. |
 | TFLM comparison harness | Implemented for first frozen workloads | Offline protocol, versioned result shape, dependency-free validator, TFLM FC/Conv runners and pinned CMSIS-NN build path. Physical result reports record identical FC outputs and a separate standalone Conv comparison. |
 | Physical MCU benchmark | **Partial evidence** | nRF52840DK/Cortex-M4 final ELF sizes, arena, median/p95 cycles and output checksums are measured for frozen FC and standalone Conv workloads. Full peak SRAM decomposition, initialization cycles, energy, other model families and other MCUs remain unmeasured. |
 | Wheel/clean install release gate | Passed locally; CI encoded | A built 0.1.0 wheel installed into a fresh venv and compiled/tested all three PyTorch-to-C fixtures from `site-packages`; the CI workflow repeats this gate. |
@@ -63,9 +63,13 @@ does not imply that BakeNN is faster or smaller than TFLM.
 2. Measure full peak SRAM decomposition, initialization cycles and energy only
    when the target runner can instrument them; current reports explicitly leave
    unavailable components unmeasured.
-3. Add direct CMSIS-NN Conv2D/Depthwise adapters before making a same-kernel
-   CMSIS-NN claim for convolution-heavy models.
-4. Re-run the clean-wheel, compiler/sanitizer and public-API gates after the
+3. Measure the new direct CMSIS-NN Conv2D/Depthwise adapters against TFLM using
+   identical kernels and frozen convolution-heavy models before making a
+   same-kernel performance claim.
+4. Run the ESP-NN artifacts on physical ESP32 and ESP32-S3, record final ELF,
+   peak stack, output checksum and cycles, and only then introduce a measured
+   ESP target cost table or acceleration claim.
+5. Re-run the clean-wheel, compiler/sanitizer and public-API gates after the
    target backend and comparison integration freeze.
 
 The compiler baseline is usable for the declared host-tested surface. The

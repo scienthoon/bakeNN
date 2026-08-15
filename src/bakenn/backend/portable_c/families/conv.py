@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+from math import prod
+
 import numpy as np
 
+from bakenn.backend.esp_nn.integration import (
+    ESP_NN_CONV_IDS,
+    ESP_NN_DEPTHWISE_IDS,
+    conv_capability as esp_nn_conv_capability,
+    conv_emission as esp_nn_conv_emission,
+    depthwise_capability as esp_nn_depthwise_capability,
+    depthwise_emission as esp_nn_depthwise_emission,
+)
 from bakenn.errors import CompileError
-from bakenn.ir.types import PerTensorQParams
+from bakenn.ir.types import PerTensorQParams, TARGET_SIZE_MAX
 from bakenn.plan import ExecutionPlan
 from bakenn.plan.steps.conv import Conv2DStep, DepthwiseConv2DStep
 
@@ -20,6 +30,10 @@ _CORTEX_M4_CONV_3X3_ID = "cortex_m4.conv2d_3x3_im2col_smlad.v1"
 _PORTABLE_DEPTHWISE_ID = "portable.depthwise_conv2d_s8.v1"
 _DEPTHWISE_3X3_ID = "optimized.depthwise_3x3_c2.v1"
 _CORTEX_M4_DEPTHWISE_ID = "cortex_m4.depthwise_3x3_smlad.v1"
+_CMSIS_NN_CONV_ID = "cmsis_nn.conv2d_s8.v4.0.0"
+_CMSIS_NN_DEPTHWISE_ID = "cmsis_nn.depthwise_conv2d_s8.v4.0.0"
+_CMSIS_I32_MAX = (1 << 31) - 1
+_CMSIS_U16_MAX = (1 << 16) - 1
 
 
 def _pack_signed_i8_pairs(rows: np.ndarray) -> np.ndarray:
@@ -641,6 +655,153 @@ def _cortex_m4_depthwise_kernel(context: StepEmitContext) -> KernelEmission:
     )
 
 
+def _cmsis_nn_conv_kernel(context: StepEmitContext) -> KernelEmission:
+    kernel_fn = f"{context.symbol}_conv2d_cmsis_nn_s8"
+    signature = f"""void {kernel_fn}(
+    const int8_t *input,
+    const int8_t *weight,
+    const int32_t *bias,
+    const int32_t *multiplier,
+    const int32_t *shift,
+    int8_t *output,
+    void *scratch,
+    int32_t scratch_bytes,
+    int32_t input_height,
+    int32_t input_width,
+    int32_t input_channels,
+    int32_t output_height,
+    int32_t output_width,
+    int32_t output_channels,
+    int32_t kernel_height,
+    int32_t kernel_width,
+    int32_t stride_height,
+    int32_t stride_width,
+    int32_t dilation_height,
+    int32_t dilation_width,
+    int32_t pad_top,
+    int32_t pad_left,
+    int32_t input_zero_point,
+    int32_t output_zero_point,
+    int32_t activation_min,
+    int32_t activation_max)"""
+    return KernelEmission(
+        key="cmsis_nn_conv2d_s8_v4_0_0",
+        header_includes=("<stddef.h>", "<stdint.h>", '"arm_nnfunctions.h"'),
+        declaration=signature + ";",
+        definition=f"""{signature} {{
+    const cmsis_nn_context cmsis_context = {{
+        .buf = scratch,
+        .size = scratch_bytes,
+    }};
+    const cmsis_nn_conv_params parameters = {{
+        .input_offset = -input_zero_point,
+        .output_offset = output_zero_point,
+        .stride = {{ .w = stride_width, .h = stride_height }},
+        .padding = {{ .w = pad_left, .h = pad_top }},
+        .dilation = {{ .w = dilation_width, .h = dilation_height }},
+        .activation = {{ .min = activation_min, .max = activation_max }},
+    }};
+    const cmsis_nn_per_channel_quant_params quantization = {{
+        .multiplier = (int32_t *)(uintptr_t)multiplier,
+        .shift = (int32_t *)(uintptr_t)shift,
+    }};
+    const cmsis_nn_dims input_dimensions = {{
+        .n = 1, .h = input_height, .w = input_width, .c = input_channels,
+    }};
+    const cmsis_nn_dims filter_dimensions = {{
+        .n = output_channels, .h = kernel_height, .w = kernel_width,
+        .c = input_channels,
+    }};
+    const cmsis_nn_dims bias_dimensions = {{
+        .n = 1, .h = 1, .w = 1, .c = output_channels,
+    }};
+    const cmsis_nn_dims output_dimensions = {{
+        .n = 1, .h = output_height, .w = output_width, .c = output_channels,
+    }};
+    (void)arm_convolve_wrapper_s8(
+        &cmsis_context, &parameters, &quantization,
+        &input_dimensions, input,
+        &filter_dimensions, weight,
+        &bias_dimensions, bias,
+        &output_dimensions, output);
+}}""",
+    )
+
+
+def _cmsis_nn_depthwise_kernel(context: StepEmitContext) -> KernelEmission:
+    kernel_fn = f"{context.symbol}_depthwise_conv2d_cmsis_nn_s8"
+    signature = f"""void {kernel_fn}(
+    const int8_t *input,
+    const int8_t *weight,
+    const int32_t *bias,
+    const int32_t *multiplier,
+    const int32_t *shift,
+    int8_t *output,
+    void *scratch,
+    int32_t scratch_bytes,
+    int32_t input_height,
+    int32_t input_width,
+    int32_t input_channels,
+    int32_t output_height,
+    int32_t output_width,
+    int32_t output_channels,
+    int32_t kernel_height,
+    int32_t kernel_width,
+    int32_t depth_multiplier,
+    int32_t stride_height,
+    int32_t stride_width,
+    int32_t dilation_height,
+    int32_t dilation_width,
+    int32_t pad_top,
+    int32_t pad_left,
+    int32_t input_zero_point,
+    int32_t output_zero_point,
+    int32_t activation_min,
+    int32_t activation_max)"""
+    return KernelEmission(
+        key="cmsis_nn_depthwise_conv2d_s8_v4_0_0",
+        header_includes=("<stddef.h>", "<stdint.h>", '"arm_nnfunctions.h"'),
+        declaration=signature + ";",
+        definition=f"""{signature} {{
+    const cmsis_nn_context cmsis_context = {{
+        .buf = scratch,
+        .size = scratch_bytes,
+    }};
+    const cmsis_nn_dw_conv_params parameters = {{
+        .input_offset = -input_zero_point,
+        .output_offset = output_zero_point,
+        .ch_mult = depth_multiplier,
+        .stride = {{ .w = stride_width, .h = stride_height }},
+        .padding = {{ .w = pad_left, .h = pad_top }},
+        .dilation = {{ .w = dilation_width, .h = dilation_height }},
+        .activation = {{ .min = activation_min, .max = activation_max }},
+    }};
+    const cmsis_nn_per_channel_quant_params quantization = {{
+        .multiplier = (int32_t *)(uintptr_t)multiplier,
+        .shift = (int32_t *)(uintptr_t)shift,
+    }};
+    const cmsis_nn_dims input_dimensions = {{
+        .n = 1, .h = input_height, .w = input_width, .c = input_channels,
+    }};
+    const cmsis_nn_dims filter_dimensions = {{
+        .n = 1, .h = kernel_height, .w = kernel_width, .c = output_channels,
+    }};
+    const cmsis_nn_dims bias_dimensions = {{
+        .n = 1, .h = 1, .w = 1, .c = output_channels,
+    }};
+    const cmsis_nn_dims output_dimensions = {{
+        .n = 1, .h = output_height, .w = output_width, .c = output_channels,
+    }};
+    (void)arm_depthwise_conv_wrapper_s8(
+        &cmsis_context, &parameters, &quantization,
+        &input_dimensions, input,
+        &filter_dimensions, weight,
+        &bias_dimensions, bias,
+        &output_dimensions, output);
+}}""",
+    )
+
+
 def _unsupported_capability(
     kernel_id: str,
     reason: str,
@@ -654,6 +815,61 @@ def _unsupported_capability(
         supported=False,
         reason=reason,
     )
+
+
+def _cmsis_nn_target(options: CBackendOptions) -> bool:
+    return (
+        options.enable_cmsis_nn
+        and "dsp" in options.target.features
+        and "armv7e-m" in options.target.features
+    )
+
+
+def _symmetric_padding(padding: tuple[int, int, int, int]) -> bool:
+    top, bottom, left, right = padding
+    return top == bottom and left == right
+
+
+def _cmsis_conv_shape_fits(
+    input_shape: tuple[int, ...],
+    output_shape: tuple[int, ...],
+    weight_shape: tuple[int, ...],
+    *parameters: int,
+) -> bool:
+    dimensions = (*input_shape, *output_shape, *weight_shape, *parameters)
+    return (
+        all(0 <= value <= _CMSIS_U16_MAX for value in dimensions)
+        and prod(input_shape) <= _CMSIS_I32_MAX
+        and prod(output_shape) <= _CMSIS_I32_MAX
+        and prod(weight_shape) <= _CMSIS_I32_MAX
+    )
+
+
+def _cmsis_conv_scratch_bytes(
+    step: Conv2DStep,
+    input_channels: int,
+    kernel_height: int,
+    kernel_width: int,
+) -> int:
+    if (
+        kernel_height == 1
+        and kernel_width == 1
+        and step.padding == (0, 0, 0, 0)
+        and step.dilation == (1, 1)
+    ):
+        return 0
+    return 4 * input_channels * kernel_height * kernel_width
+
+
+def _cmsis_depthwise_scratch_bytes(
+    step: DepthwiseConv2DStep,
+    input_channels: int,
+    kernel_height: int,
+    kernel_width: int,
+) -> int:
+    if step.depth_multiplier == 1 and step.dilation == (1, 1):
+        return 2 * input_channels * kernel_height * kernel_width
+    return 0
 
 
 @kernel_capabilities.register
@@ -674,6 +890,60 @@ def _conv2d_capabilities(
     weight = plan.constants[step.weight]
     output_channels = output_type.shape[3]
     input_channels = input_type.shape[3]
+    kernel_height = weight.shape[1] if weight.ndim == 4 else 0
+    kernel_width = weight.shape[2] if weight.ndim == 4 else 0
+
+    def cmsis_nn_conv() -> KernelCapability:
+        failure: str | None = None
+        scratch_size = 0
+        if not options.enable_cmsis_nn:
+            failure = "CMSIS-NN source bundling is disabled"
+        elif not _cmsis_nn_target(options):
+            failure = "CMSIS-NN Conv2D v4 requires an ARMv7E-M DSP target"
+        elif step.groups != 1:
+            failure = "CMSIS-NN Conv2D v4 does not support grouped convolution"
+        elif not _symmetric_padding(step.padding):
+            failure = "CMSIS-NN Conv2D v4 requires symmetric spatial padding"
+        elif not _cmsis_conv_shape_fits(
+            input_type.shape,
+            output_type.shape,
+            weight.shape,
+            *step.stride,
+            *step.dilation,
+            *step.padding,
+        ):
+            failure = (
+                "CMSIS-NN Conv2D dimensions must fit its uint16 kernel fields "
+                "and signed-32-bit index products"
+            )
+        elif (
+            weight.dtype != np.int8
+            or weight.ndim != 4
+            or weight.shape[0] != output_channels
+            or weight.shape[3] != input_channels
+        ):
+            failure = "CMSIS-NN Conv2D requires matching OHWI int8 weights"
+        else:
+            scratch_size = _cmsis_conv_scratch_bytes(
+                step, input_channels, kernel_height, kernel_width
+            )
+            if scratch_size > min(TARGET_SIZE_MAX, _CMSIS_I32_MAX):
+                failure = "CMSIS-NN Conv2D scratch exceeds its signed 32-bit context"
+        if failure is not None:
+            return _unsupported_capability(_CMSIS_NN_CONV_ID, failure, priority=400)
+        return KernelCapability(
+            kernel_id=_CMSIS_NN_CONV_ID,
+            priority=400,
+            optimized=True,
+            supported=True,
+            reason=(
+                "pinned CMSIS-NN v4 Conv2D wrapper supports this ARMv7E-M DSP "
+                "NHWC/OHWI shape"
+            ),
+            scratch_size=scratch_size,
+            scratch_alignment=4 if scratch_size else 1,
+        )
+
     def generic_1x1() -> KernelCapability:
         failure: str | None = None
         if step.groups != 1:
@@ -801,7 +1071,14 @@ def _conv2d_capabilities(
             scratch_alignment=4,
         )
 
-    return (cortex_m4_1x1(), cortex_m4_3x3(), generic_1x1(), portable)
+    return (
+        esp_nn_conv_capability(step, plan, options),
+        cmsis_nn_conv(),
+        cortex_m4_1x1(),
+        cortex_m4_3x3(),
+        generic_1x1(),
+        portable,
+    )
 
 
 @kernel_capabilities.register
@@ -821,6 +1098,64 @@ def _depthwise_capabilities(
     output_type = plan.tensors[step.output].tensor_type
     weight = plan.constants[step.weight]
     output_channels = output_type.shape[3]
+    input_channels = input_type.shape[3]
+    kernel_height = weight.shape[0] if weight.ndim == 3 else 0
+    kernel_width = weight.shape[1] if weight.ndim == 3 else 0
+
+    def cmsis_nn_depthwise() -> KernelCapability:
+        failure: str | None = None
+        scratch_size = 0
+        if not options.enable_cmsis_nn:
+            failure = "CMSIS-NN source bundling is disabled"
+        elif not _cmsis_nn_target(options):
+            failure = "CMSIS-NN DepthwiseConv2D v4 requires an ARMv7E-M DSP target"
+        elif not _symmetric_padding(step.padding):
+            failure = "CMSIS-NN DepthwiseConv2D v4 requires symmetric spatial padding"
+        elif not _cmsis_conv_shape_fits(
+            input_type.shape,
+            output_type.shape,
+            weight.shape,
+            *step.stride,
+            *step.dilation,
+            *step.padding,
+            step.depth_multiplier,
+        ):
+            failure = (
+                "CMSIS-NN DepthwiseConv2D dimensions must fit its uint16 kernel "
+                "fields and signed-32-bit index products"
+            )
+        elif (
+            weight.dtype != np.int8
+            or weight.ndim != 3
+            or weight.shape[2] != output_channels
+            or output_channels != input_channels * step.depth_multiplier
+        ):
+            failure = "CMSIS-NN DepthwiseConv2D requires matching HWO int8 weights"
+        else:
+            scratch_size = _cmsis_depthwise_scratch_bytes(
+                step, input_channels, kernel_height, kernel_width
+            )
+            if scratch_size > min(TARGET_SIZE_MAX, _CMSIS_I32_MAX):
+                failure = (
+                    "CMSIS-NN DepthwiseConv2D scratch exceeds its signed 32-bit context"
+                )
+        if failure is not None:
+            return _unsupported_capability(
+                _CMSIS_NN_DEPTHWISE_ID, failure, priority=400
+            )
+        return KernelCapability(
+            kernel_id=_CMSIS_NN_DEPTHWISE_ID,
+            priority=400,
+            optimized=True,
+            supported=True,
+            reason=(
+                "pinned CMSIS-NN v4 DepthwiseConv2D wrapper supports this "
+                "ARMv7E-M DSP NHWC/HWO shape"
+            ),
+            scratch_size=scratch_size,
+            scratch_alignment=4 if scratch_size else 1,
+        )
+
     def generic_depthwise() -> KernelCapability:
         failure: str | None = None
         if not options.enable_weight_packing:
@@ -890,7 +1225,13 @@ def _depthwise_capabilities(
             constant_overrides={step.weight: packed.name},
         )
 
-    return (cortex_m4_depthwise(), generic_depthwise(), portable)
+    return (
+        esp_nn_depthwise_capability(step, plan, options),
+        cmsis_nn_depthwise(),
+        cortex_m4_depthwise(),
+        generic_depthwise(),
+        portable,
+    )
 
 
 def _step_constants(
@@ -925,7 +1266,31 @@ def _emit_conv2d(step: Conv2DStep, context: StepEmitContext) -> StepEmission:
     implementation = (
         _PORTABLE_CONV_ID if context.selection is None else context.selection.kernel_id
     )
-    if implementation == _CORTEX_M4_CONV_1X1_ID:
+    if implementation in ESP_NN_CONV_IDS.values():
+        selected_kernel, call = esp_nn_conv_emission(
+            step, context, multiplier_symbol, shift_symbol
+        )
+    elif implementation == _CMSIS_NN_CONV_ID:
+        scratch_size = 0 if context.selection is None else context.selection.scratch_size
+        scratch_pointer = context.scratch_pointer if scratch_size else "NULL"
+        kernel_fn = f"{context.symbol}_conv2d_cmsis_nn_s8"
+        call = f"""    {kernel_fn}(
+        {context.pointer(step.input, mutable=False)},
+        {context.pointer(step.weight, mutable=False)},
+        {context.pointer(step.bias, mutable=False)},
+        {multiplier_symbol}, {shift_symbol},
+        {context.pointer(step.output, mutable=True)},
+        {scratch_pointer}, {scratch_size},
+        {input_height}, {input_width}, {input_channels},
+        {output_height}, {output_width}, {output_channels},
+        {kernel_height}, {kernel_width},
+        {stride_height}, {stride_width},
+        {dilation_height}, {dilation_width},
+        {pad_top}, {pad_left},
+        {input_qparams.zero_point}, {output_qparams.zero_point},
+        {step.activation_min}, {step.activation_max});"""
+        selected_kernel = _cmsis_nn_conv_kernel(context)
+    elif implementation == _CORTEX_M4_CONV_1X1_ID:
         kernel_fn = f"{context.symbol}_conv2d_1x1_cortex_m4_smlad_s8"
         call = f"""    {kernel_fn}(
         {context.pointer(step.input, mutable=False)},
@@ -1030,7 +1395,31 @@ def _emit_depthwise_conv2d(
         if context.selection is None
         else context.selection.kernel_id
     )
-    if implementation == _CORTEX_M4_DEPTHWISE_ID:
+    if implementation in ESP_NN_DEPTHWISE_IDS.values():
+        selected_kernel, call = esp_nn_depthwise_emission(
+            step, context, multiplier_symbol, shift_symbol
+        )
+    elif implementation == _CMSIS_NN_DEPTHWISE_ID:
+        scratch_size = 0 if context.selection is None else context.selection.scratch_size
+        scratch_pointer = context.scratch_pointer if scratch_size else "NULL"
+        kernel_fn = f"{context.symbol}_depthwise_conv2d_cmsis_nn_s8"
+        call = f"""    {kernel_fn}(
+        {context.pointer(step.input, mutable=False)},
+        {context.pointer(step.weight, mutable=False)},
+        {context.pointer(step.bias, mutable=False)},
+        {multiplier_symbol}, {shift_symbol},
+        {context.pointer(step.output, mutable=True)},
+        {scratch_pointer}, {scratch_size},
+        {input_height}, {input_width}, {input_channels},
+        {output_height}, {output_width}, {output_channels},
+        {kernel_height}, {kernel_width}, {step.depth_multiplier},
+        {stride_height}, {stride_width},
+        {dilation_height}, {dilation_width},
+        {pad_top}, {pad_left},
+        {input_qparams.zero_point}, {output_qparams.zero_point},
+        {step.activation_min}, {step.activation_max});"""
+        selected_kernel = _cmsis_nn_depthwise_kernel(context)
+    elif implementation == _CORTEX_M4_DEPTHWISE_ID:
         kernel_fn = f"{context.symbol}_depthwise_3x3_cortex_m4_smlad_s8"
         call = f"""    {kernel_fn}(
         {context.pointer(step.input, mutable=False)},

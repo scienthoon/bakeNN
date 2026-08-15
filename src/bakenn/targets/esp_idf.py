@@ -49,10 +49,9 @@ def export_esp_idf_component(
     target: str | TargetDescriptor,
     output_dir: str | Path,
 ) -> Path:
-    """Package generated model sources as a dependency-free ESP-IDF component."""
+    """Package generated model and pinned support sources as an ESP-IDF component."""
 
     descriptor, _ = _require_esp_target(artifacts, target)
-    del descriptor
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     files = (
@@ -66,16 +65,75 @@ def export_esp_idf_component(
     )
     for source in files:
         shutil.copy2(source, output / source.name)
-    source_names = (
+    generated_source_names = (
         artifacts.model_source.name,
         artifacts.weights_source.name,
         artifacts.kernels_source.name,
     )
-    cmake_sources = " ".join(f'"{name}"' for name in source_names)
+    support_source_names: list[str] = []
+    for source in (*artifacts.support_sources, *artifacts.third_party_licenses):
+        try:
+            relative = source.relative_to(artifacts.output_dir)
+        except ValueError as error:
+            raise CompileError(
+                f"support file is outside the generated artifact: {source}"
+            ) from error
+        destination = output / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        if source in artifacts.support_sources:
+            support_source_names.append(relative.as_posix())
+    include_names = ["."]
+    for include_dir in artifacts.support_include_dirs:
+        try:
+            relative = include_dir.relative_to(artifacts.output_dir)
+        except ValueError as error:
+            raise CompileError(
+                f"support include directory is outside the generated artifact: {include_dir}"
+            ) from error
+        include_names.append(relative.as_posix())
+        shutil.copytree(include_dir, output / relative, dirs_exist_ok=True)
+
+    cmake_sources = " ".join(
+        f'"{name}"' for name in (*generated_source_names, *support_source_names)
+    )
+    cmake_includes = " ".join(f'"{name}"' for name in include_names)
+    strict_generated = " ".join(f'"{name}"' for name in generated_source_names)
+    manifest = _load_manifest(artifacts)
+    dependencies = manifest.get("bundled_dependencies", [])
+    has_esp_nn = any(
+        isinstance(item, dict) and item.get("name") == "ESP-NN"
+        for item in dependencies
+    )
+    idf_target_macro = {
+        "esp32": "CONFIG_IDF_TARGET_ESP32",
+        "esp32s3": "CONFIG_IDF_TARGET_ESP32S3",
+        "esp32c3": "CONFIG_IDF_TARGET_ESP32C3",
+    }[str(descriptor.metadata["idf_target"])]
+    definitions = (
+        "target_compile_definitions(${COMPONENT_LIB} PRIVATE "
+        f"CONFIG_NN_OPTIMIZED=1 {idf_target_macro}=1)\n"
+        if has_esp_nn
+        else ""
+    )
+    target_options = (
+        "if(CONFIG_IDF_TARGET_ESP32S3)\n"
+        "  target_compile_options(${COMPONENT_LIB} PRIVATE -mlongcalls "
+        "-fno-unroll-loops -O2 -Wno-unused-function)\n"
+        "else()\n"
+        "  target_compile_options(${COMPONENT_LIB} PRIVATE -O2 -Wno-unused-function)\n"
+        "endif()\n"
+        if has_esp_nn
+        else ""
+    )
     (output / "CMakeLists.txt").write_text(
-        f"idf_component_register(SRCS {cmake_sources} INCLUDE_DIRS \".\")\n"
+        f"idf_component_register(SRCS {cmake_sources} INCLUDE_DIRS {cmake_includes})\n"
         "target_compile_options(${COMPONENT_LIB} PRIVATE "
-        "-std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections)\n",
+        "-std=c11 -ffunction-sections -fdata-sections)\n"
+        f"set_source_files_properties({strict_generated} PROPERTIES "
+        'COMPILE_OPTIONS "-Wall;-Wextra;-Werror;-pedantic")\n'
+        + definitions
+        + target_options,
         encoding="utf-8",
     )
     return output
@@ -99,18 +157,56 @@ _Alignas({macro}_ARENA_ALIGNMENT)
 static uint8_t model_arena[{macro}_ARENA_SIZE > 0u ? {macro}_ARENA_SIZE : 1u];
 static int8_t model_input[{macro}_INPUT_SIZE];
 static int8_t model_output[{macro}_OUTPUT_SIZE];
+static uint32_t measured_cycles[101];
+
+static void sort_cycles(void) {{
+    for (uint32_t index = 1u; index < 101u; ++index) {{
+        const uint32_t value = measured_cycles[index];
+        uint32_t position = index;
+        while (position > 0u && measured_cycles[position - 1u] > value) {{
+            measured_cycles[position] = measured_cycles[position - 1u];
+            --position;
+        }}
+        measured_cycles[position] = value;
+    }}
+}}
+
+static uint32_t output_checksum(void) {{
+    uint32_t hash = UINT32_C(2166136261);
+    for (uint32_t index = 0u; index < {macro}_OUTPUT_SIZE; ++index) {{
+        hash ^= (uint8_t)model_output[index];
+        hash *= UINT32_C(16777619);
+    }}
+    return hash;
+}}
 
 void app_main(void) {{
     uint8_t *arena = {macro}_ARENA_SIZE > 0u ? model_arena : NULL;
-    const uint32_t start = esp_cpu_get_cycle_count();
+    for (uint32_t index = 0u; index < {macro}_INPUT_SIZE; ++index) {{
+        model_input[index] = (int8_t){macro}_INPUT_ZERO_POINT;
+    }}
+
+    uint32_t start = esp_cpu_get_cycle_count();
     {symbol}_infer(arena, model_input, model_output);
-    const uint32_t cycles = esp_cpu_get_cycle_count() - start;
+    const uint32_t first_cycles = esp_cpu_get_cycle_count() - start;
+    for (uint32_t run = 0u; run < 8u; ++run) {{
+        {symbol}_infer(arena, model_input, model_output);
+    }}
+    for (uint32_t run = 0u; run < 101u; ++run) {{
+        start = esp_cpu_get_cycle_count();
+        {symbol}_infer(arena, model_input, model_output);
+        measured_cycles[run] = esp_cpu_get_cycle_count() - start;
+    }}
+    sort_cycles();
     const UBaseType_t stack_words_free = uxTaskGetStackHighWaterMark(NULL);
 
-    printf("BAKENN target=%s cycles=%" PRIu32
+    printf("BAKENN target=%s first_cycles=%" PRIu32
+           " median_cycles=%" PRIu32 " p95_cycles=%" PRIu32
            " stack_high_water_words=%" PRIu32 " arena=%u\\n",
-           CONFIG_IDF_TARGET, cycles, (uint32_t)stack_words_free,
+           CONFIG_IDF_TARGET, first_cycles, measured_cycles[50],
+           measured_cycles[95], (uint32_t)stack_words_free,
            (unsigned){macro}_ARENA_SIZE);
+    printf("BAKENN_OUTPUT_FNV1A=0x%08" PRIx32 "\\n", output_checksum());
     printf("BAKENN_OUTPUT");
     for (uint32_t index = 0; index < {macro}_OUTPUT_SIZE; ++index) {{
         printf(" %d", (int)model_output[index]);
@@ -159,7 +255,7 @@ def export_esp_idf_project(
                 "target": descriptor.manifest(),
                 "model_manifest": f"components/bakenn_model/{artifacts.manifest.name}",
                 "execution_metrics": {
-                    "cycles": "printed by the physical-board runner; unmeasured at package time",
+                    "cycles": "cold, median and p95 cycles over 8 warmups and 101 measured calls; unmeasured at package time",
                     "stack": "FreeRTOS high-water mark printed by the physical-board runner",
                 },
             },

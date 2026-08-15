@@ -166,6 +166,35 @@ The lane-expanded packed representation can cost more Flash than semantic INT8
 weights, and the built-in measured cost table remains empty until board runs
 exist.
 
+## ESP-NN target overlay
+
+ESP-NN is an explicit, opt-in target overlay; it does not change the portable
+graph or fixed-point contract. BakeNN pins ESP-NN 1.2.6 at revision
+`c0876179f1cf4b4b9073b4f81cb65c8051ccb476`, bundles the corresponding source
+closure into the generated ESP-IDF component, and records the dependency and
+requantization configuration in the manifest.
+
+The ESP32-S3 family covers Conv2D, DepthwiseConv2D, per-channel Linear,
+AveragePool2D and MaxPool2D. Conv/Depthwise global scratch and the guarded,
+aligned Linear input staging area are represented by `CBackendPlan.scratch`
+and overlaid with the activation arena. The original ESP32 uses ESP-NN's
+optimized Conv/Depthwise C path; its ESP-NN FC/pool entry points are ANSI
+implementations, so selection retains BakeNN's existing generic kernels there.
+ESP32-C3 is unsupported by this ESP-NN revision and falls back normally.
+
+All predicates are semantic, not merely shape checks: they include layout,
+groups/depth multiplier, dilation, padding symmetry where required, channel
+alignment, zero points, per-channel multipliers/shifts, fused clamp and pooling
+rounding. `CONFIG_NN_SKIP_NUDGE` is forbidden because it would change the
+declared double-rounding result. Unsupported cases are portable fallback under
+`AUTO` and exact compile errors under `REQUIRE_OPTIMIZED`.
+
+The original ESP32 optimized sources execute in the host differential suite.
+ESP32-S3's Xtensa assembly cannot execute on the host, so the wrappers are
+checked against ESP-NN's official ANSI implementation and the assembly source
+closure is cross-compiled by ESP-IDF CI. Neither proves physical-device speed;
+S3 cycle, cache, peak stack and energy results remain a measurement gate.
+
 ## Acceptance and review gates
 
 The P2 slice is accepted only if:
@@ -203,7 +232,9 @@ The following are explicit next-phase limitations, not hidden fallbacks:
 
 - the portable target has only the declared generic Linear, 1x1 Conv2D and 3x3
   depthwise candidates; Cortex-M4 additionally has DSP Linear, 1x1, depthwise,
-  general 3x3-with-scratch and specialized pool candidates;
+  general 3x3-with-scratch and specialized pool candidates; opt-in ESP32-S3
+  adds ESP-NN Conv/Depthwise/Linear/pool and original ESP32 adds its optimized
+  Conv/Depthwise source path;
 - selection priority is a static policy; built-in target cost tables have zero
   entries until physical evidence exists;
 - the generic OI2 family remains standard C; the Cortex-M4 family is a distinct
@@ -211,7 +242,7 @@ The following are explicit next-phase limitations, not hidden fallbacks:
 - the host smoke benchmark is useful only for regression detection;
 - nRF52840 Flash, linked SRAM, cycles and output checksums are measured for the
   frozen FC and standalone Conv reports; full peak SRAM decomposition,
-  initialization cycles, energy and other targets remain unmeasured.
+  initialization cycles, energy and ESP targets remain unmeasured.
 
 Until same-device evidence is added, portable remains the default and BakeNN
 must not claim that `AUTO` is universally faster.

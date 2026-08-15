@@ -1,5 +1,9 @@
 # BakeNN
 
+[![CI](https://github.com/scienthoon/bakeNN/actions/workflows/ci.yml/badge.svg)](https://github.com/scienthoon/bakeNN/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
+
 BakeNN is a new, independent INT8 AOT compiler core for fixed-model MCU
 products. It converts an already-trained FP32 model plus representative
 calibration data into a model-specialized, heap-free standalone C11 library.
@@ -17,6 +21,8 @@ Conv2D graph. Those measurements demonstrate the generated-C path on one
 Cortex-M4 target; they are not a claim that every BakeNN model or every MCU is
 faster than TFLM. See the [physical FC result](benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md)
 and the [benchmark protocol](benchmarks/tflm_compare/README.md).
+The [evidence summary](benchmarks/RESULTS.md) separates physical measurements,
+host numerical tests and boardless target builds.
 
 ## Measured against TFLite Micro on nRF52840
 
@@ -84,9 +90,13 @@ the model changes, this provides concrete advantages:
   `alignment <= 16` can therefore be enforced mechanically. Generated-model
   and cross-ELF checks do not replace measurement of the final application's
   stack and unrelated globals.
-- **Direct vendor-kernel calls.** A supported layer can call CMSIS-NN directly
-  without retaining TFLM around that kernel. The current direct CMSIS-NN
-  adapter covers FullyConnected on ARMv7E-M DSP targets.
+- **Direct vendor-kernel calls.** A supported layer can call CMSIS-NN or
+  ESP-NN directly without retaining TFLM around that kernel. The current
+  CMSIS-NN adapters cover FullyConnected, Conv2D, DepthwiseConv2D,
+  AveragePool2D and MaxPool2D on ARMv7E-M DSP targets. The opt-in ESP-NN
+  backend covers SIMD Conv2D, DepthwiseConv2D, per-channel FullyConnected and
+  pooling on ESP32-S3, plus Espressif's optimized Conv2D/DepthwiseConv2D path
+  on the original ESP32.
 - **Inspectable deployment artifacts.** The generated C function order,
   weights, static offsets, kernel IDs, qparams and manifest can be audited
   directly. Firmware review does not need to reconstruct the model across a
@@ -152,6 +162,17 @@ The tradeoff is deliberate: BakeNN currently targets static batch-one,
 fixed-shape models and supports a narrower operator surface. TFLM has broader
 operator coverage and is preferable when one firmware runtime must accept
 different model files without recompilation.
+
+Static batch one and the single-input/single-output model ABI are intentional
+product constraints, not temporary gaps waiting for a dynamic runtime. BakeNN
+targets production MCU firmware where the chip and model are fixed, the model
+is linked into the firmware, and a model change normally ships with a firmware
+rebuild. Keeping this contract static lets the compiler finalize tensor shapes,
+execution order, buffer lifetimes, SRAM offsets and kernel choices ahead of
+deployment; it is what enables deterministic memory checks, buffer reuse and
+model-specific C generation without an interpreter. Internal graphs may still
+contain branches, residual connections and multi-input operators—the
+single-input/single-output restriction applies to the public model ABI.
 
 ```text
 PyTorch FP32 eval model + calibration samples
@@ -242,6 +263,9 @@ input_q = bakenn.quantize_input(compiled.plan, input_fp32_nhwc)
 output_q = bakenn.run_reference(compiled.plan, input_q)
 ```
 
+For a runnable FP32 PyTorch -> PTQ -> ESP-NN -> self-contained ESP-IDF flow,
+see the [ESP32-S3 end-to-end demo](examples/esp32s3_end_to_end/README.md).
+
 The same pipeline is available as explicit inspectable stages:
 
 ```python
@@ -290,13 +314,47 @@ Packed SMLAD weights can increase Flash. Target eligibility is not itself a
 performance claim; the measured nRF52840 results cover only the checked-in
 FC/Conv workloads.
 
-The optional direct CMSIS-NN source backend currently covers FullyConnected on
-an ARMv7E-M DSP target. It bundles only the required CMSIS-NN v4 source closure
-and selects `cmsis_nn.linear_s8.v4.0.0` when the Linear has the required
-per-tensor requantization contract. Conv2D and DepthwiseConv2D continue to use
-BakeNN's own Cortex-M4 or portable kernels until their direct CMSIS-NN
-adapters are added. Unsupported cases fall back or fail under
+The optional direct CMSIS-NN source backend covers FullyConnected, Conv2D,
+DepthwiseConv2D, AveragePool2D and MaxPool2D on an ARMv7E-M DSP target. It
+bundles only the pinned CMSIS-NN v4 source closure required by the selected
+model. Conv and Depthwise pass affine input/output offsets, per-output-channel
+multiplier/shift arrays and fused activation clamps directly to the CMSIS
+wrappers. Their target buffer-size formulas, plus AveragePool scratch, are
+resolved on the host and included in BakeNN's shared static SRAM arena and
+manifest. Capability checks cover layout, groups/depth multiplier, dimensions,
+stride, dilation and padding. AveragePool uses CMSIS only when its zero-point
+and valid-window counts prove the CMSIS rounding result byte-exact with
+`bakenn.int8.v1`; unsupported cases fall back or fail under
 `REQUIRE_OPTIMIZED`.
+
+The optional ESP-NN source backend is a second vendor overlay. It vendors
+ESP-NN 1.2.6 at revision
+`c0876179f1cf4b4b9073b4f81cb65c8051ccb476`, records that identity in the
+manifest, and copies the pinned target source closure, headers and license into
+the generated ESP-IDF component. It does not use TFLM or require an ESP
+component download while building the generated project.
+
+- `esp32s3` selects ESP-NN Conv2D, DepthwiseConv2D, per-channel
+  FullyConnected, AveragePool2D and MaxPool2D when their exact capability
+  predicates hold. Required ESP-NN scratch and safe FC staging are included in
+  BakeNN's single statically planned scratch arena.
+- `esp32` selects Espressif's optimized generic Conv2D and
+  DepthwiseConv2D implementations. ESP-NN maps FC and pooling to ANSI C on this
+  chip, so BakeNN deliberately keeps its own verified generic kernels for
+  those operators.
+- `esp32c3` has no ESP-NN implementation in the pinned release and therefore
+  retains BakeNN's portable/generic optimized fallback.
+
+BakeNN fixes ESP-NN's TFLM-compatible double-rounding profile and never enables
+`CONFIG_NN_SKIP_NUDGE`. Capability checks reject unsupported dilation,
+depthwise geometry, alignment and the AveragePool cases whose rounding cannot
+be proven byte-exact with `bakenn.int8.v1`; `AUTO` then falls back, while
+`REQUIRE_OPTIMIZED` reports the exact reason. Host tests execute the original
+ESP32 optimized C and compare it byte-for-byte with BakeNN's integer reference.
+ESP32-S3 wrappers are host-checked through the official ESP-NN ANSI oracle and
+the real Xtensa sources are compiled in boardless ESP-IDF CI. Actual S3 SIMD
+cycles, cache behavior and energy still require a physical ESP32-S3 and are not
+claimed here.
 
 Target selection is optional. `portable32` remains the default; ARM/RISC-V
 profiles add exact ABI/alignment/compiler metadata and ESP profiles can emit an
@@ -308,7 +366,17 @@ report = bakenn.build_freestanding_elf(
     compiled.artifacts, "cortex-m4", "build/m4/cross"
 )
 
-esp = bakenn.compile(graph, "build/s3", target="esp32s3")
+esp_options = bakenn.CBackendOptions(
+    kernel_policy=bakenn.KernelPolicy.AUTO,
+    enable_esp_nn=True,
+    target=bakenn.ESP32_S3,
+)
+esp = bakenn.compile(
+    graph,
+    "build/s3",
+    backend_options=esp_options,
+    target="esp32s3",
+)
 project = bakenn.export_esp_idf_project(
     esp.artifacts, "esp32s3", "build/s3/project"
 )
@@ -317,7 +385,9 @@ project = bakenn.export_esp_idf_project(
 The built-in target ids are `portable32`, `cortex-m0plus`, `cortex-m4`,
 `rv32imc`, `esp32`, `esp32s3`, and `esp32c3`. ARM M0+/M4 and RV32IMC have a
 freestanding ELF/link-map/symbol-audit path. ESP-IDF packaging and boardless
-build CI are provided. Physical cycle evidence currently covers the
+build CI are provided, including the opt-in ESP-NN Conv/Depthwise smoke graph
+on ESP32 and ESP32-S3 and its portable fallback on ESP32-C3. Physical cycle
+evidence currently covers the
 nRF52840DK/Cortex-M4 benchmark in
 [`benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md`](benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md);
 no ESP or whole-firmware energy result is claimed. See [the target-layer

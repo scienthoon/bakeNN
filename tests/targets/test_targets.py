@@ -168,6 +168,10 @@ def test_esp_idf_project_is_self_contained_and_target_checked(
     runner = (project.main / "main.c").read_text(encoding="utf-8")
     assert "esp_cpu_get_cycle_count" in runner
     assert "uxTaskGetStackHighWaterMark" in runner
+    assert "median_cycles=" in runner
+    assert "p95_cycles=" in runner
+    assert "INPUT_ZERO_POINT" in runner
+    assert "BAKENN_OUTPUT_FNV1A" in runner
     assert "BAKENN_OUTPUT" in runner
     target_data = json.loads((project.root / "bakenn_target.json").read_text())
     assert target_data["idf_target"] == target.metadata["idf_target"]

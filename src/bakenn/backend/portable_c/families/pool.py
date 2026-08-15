@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from math import prod
+
+from bakenn.backend.esp_nn.integration import (
+    ESP_NN_AVERAGE_POOL_IDS,
+    ESP_NN_MAX_POOL_IDS,
+    pool_capability as esp_nn_pool_capability,
+    pool_emission as esp_nn_pool_emission,
+)
 from bakenn.ir.types import PerTensorQParams
 from bakenn.errors import CompileError
 from bakenn.plan import ExecutionPlan
@@ -13,10 +21,65 @@ _PORTABLE_AVERAGE_ID = "portable.average_pool2d_s8.v1"
 _PORTABLE_MAX_ID = "portable.max_pool2d_s8.v1"
 _CORTEX_M4_GLOBAL_AVERAGE_ID = "cortex_m4.global_average_pool2d_s8.v1"
 _CORTEX_M4_MAX_2X2_ID = "cortex_m4.max_pool2d_2x2_s2.v1"
+_CMSIS_NN_AVERAGE_ID = "cmsis_nn.average_pool2d_s8.v4.0.0"
+_CMSIS_NN_MAX_ID = "cmsis_nn.max_pool2d_s8.v4.0.0"
+_CMSIS_I32_MAX = (1 << 31) - 1
 
 
 def _target_supported(options: CBackendOptions) -> bool:
     return "dsp" in options.target.features and "armv7e-m" in options.target.features
+
+
+def _symmetric_padding(padding: tuple[int, int, int, int]) -> bool:
+    top, bottom, left, right = padding
+    return top == bottom and left == right
+
+
+def _cmsis_pool_shape_fits(
+    step: AveragePool2DStep | MaxPool2DStep,
+    plan: ExecutionPlan,
+) -> bool:
+    input_type = plan.tensors[step.input].tensor_type
+    output_type = plan.tensors[step.output].tensor_type
+    values = (
+        *input_type.shape,
+        *output_type.shape,
+        *step.kernel,
+        *step.stride,
+        *step.padding,
+    )
+    return (
+        all(0 <= value <= _CMSIS_I32_MAX for value in values)
+        and prod(input_type.shape) <= _CMSIS_I32_MAX
+        and prod(output_type.shape) <= _CMSIS_I32_MAX
+        and prod(step.kernel) <= _CMSIS_I32_MAX
+    )
+
+
+def _cmsis_average_rounding_is_exact(
+    step: AveragePool2DStep,
+    plan: ExecutionPlan,
+) -> bool:
+    input_type = plan.tensors[step.input].tensor_type
+    output_type = plan.tensors[step.output].tensor_type
+    qparams = input_type.qparams
+    assert isinstance(qparams, PerTensorQParams)
+    if qparams.zero_point == 0:
+        return True
+    _, input_h, input_w, _ = input_type.shape
+    _, output_h, output_w, _ = output_type.shape
+    kernel_h, kernel_w = step.kernel
+    stride_h, stride_w = step.stride
+    pad_top, _, pad_left, _ = step.padding
+    for output_y in range(output_h):
+        start_y = output_y * stride_h - pad_top
+        valid_h = max(0, min(start_y + kernel_h, input_h) - max(start_y, 0))
+        for output_x in range(output_w):
+            start_x = output_x * stride_w - pad_left
+            valid_w = max(0, min(start_x + kernel_w, input_w) - max(start_x, 0))
+            if (valid_h * valid_w) % 2 == 0:
+                return False
+    return True
 
 
 @kernel_capabilities.register
@@ -31,6 +94,32 @@ def _average_capabilities(
         step.padding == (0, 0, 0, 0)
         and step.kernel == input_type.shape[1:3]
         and output_type.shape[1:3] == (1, 1)
+    )
+    cmsis_supported = (
+        options.enable_cmsis_nn
+        and _target_supported(options)
+        and _symmetric_padding(step.padding)
+        and _cmsis_pool_shape_fits(step, plan)
+        and input_type.shape[3] * 4 <= _CMSIS_I32_MAX
+        and _cmsis_average_rounding_is_exact(step, plan)
+    )
+    cmsis = KernelCapability(
+        _CMSIS_NN_AVERAGE_ID,
+        400,
+        True,
+        cmsis_supported,
+        (
+            "pinned CMSIS-NN v4 AveragePool supports this ARMv7E-M DSP shape"
+            if cmsis_supported
+            else (
+                "CMSIS-NN AveragePool requires source bundling, an ARMv7E-M DSP "
+                "target, signed-32-bit dimensions/scratch, symmetric padding, and "
+                "a zero-point/window combination that preserves BakeNN v1 "
+                "half-away rounding"
+            )
+        ),
+        scratch_size=input_type.shape[3] * 4 if cmsis_supported else 0,
+        scratch_alignment=4 if cmsis_supported else 1,
     )
     optimized = KernelCapability(
         _CORTEX_M4_GLOBAL_AVERAGE_ID,
@@ -50,7 +139,7 @@ def _average_capabilities(
         True,
         "portable AveragePool2D supports every verified step",
     )
-    return optimized, portable
+    return esp_nn_pool_capability(step, plan, options), cmsis, optimized, portable
 
 
 @kernel_capabilities.register
@@ -59,7 +148,26 @@ def _max_capabilities(
     plan: ExecutionPlan,
     options: CBackendOptions,
 ) -> tuple[KernelCapability, ...]:
-    del plan
+    cmsis_supported = (
+        options.enable_cmsis_nn
+        and _target_supported(options)
+        and _symmetric_padding(step.padding)
+        and _cmsis_pool_shape_fits(step, plan)
+    )
+    cmsis = KernelCapability(
+        _CMSIS_NN_MAX_ID,
+        400,
+        True,
+        cmsis_supported,
+        (
+            "pinned CMSIS-NN v4 MaxPool supports this ARMv7E-M DSP shape"
+            if cmsis_supported
+            else (
+                "CMSIS-NN MaxPool requires source bundling, an ARMv7E-M DSP "
+                "target, signed-32-bit dimensions, and symmetric padding"
+            )
+        ),
+    )
     exact = step.kernel == (2, 2) and step.stride == (2, 2) and step.padding == (0, 0, 0, 0)
     optimized = KernelCapability(
         _CORTEX_M4_MAX_2X2_ID,
@@ -79,7 +187,64 @@ def _max_capabilities(
         True,
         "portable MaxPool2D supports every verified step",
     )
-    return optimized, portable
+    return esp_nn_pool_capability(step, plan, options), cmsis, optimized, portable
+
+
+def _cmsis_pool_kernel(
+    context: StepEmitContext,
+    *,
+    average: bool,
+) -> KernelEmission:
+    operation = "average_pool2d" if average else "max_pool2d"
+    cmsis_function = "arm_avgpool_s8" if average else "arm_max_pool_s8"
+    function = f"{context.symbol}_{operation}_cmsis_nn_s8"
+    signature = f"""void {function}(
+    const int8_t *input,
+    int8_t *output,
+    void *scratch,
+    int32_t scratch_bytes,
+    int32_t input_height,
+    int32_t input_width,
+    int32_t channels,
+    int32_t output_height,
+    int32_t output_width,
+    int32_t kernel_height,
+    int32_t kernel_width,
+    int32_t stride_height,
+    int32_t stride_width,
+    int32_t pad_top,
+    int32_t pad_left,
+    int32_t activation_min,
+    int32_t activation_max)"""
+    return KernelEmission(
+        key=f"cmsis_nn_{operation}_s8_v4_0_0",
+        header_includes=("<stddef.h>", "<stdint.h>", '"arm_nnfunctions.h"'),
+        declaration=signature + ";",
+        definition=f"""{signature} {{
+    const cmsis_nn_context cmsis_context = {{
+        .buf = scratch,
+        .size = scratch_bytes,
+    }};
+    const cmsis_nn_pool_params parameters = {{
+        .stride = {{ .w = stride_width, .h = stride_height }},
+        .padding = {{ .w = pad_left, .h = pad_top }},
+        .activation = {{ .min = activation_min, .max = activation_max }},
+    }};
+    const cmsis_nn_dims input_dimensions = {{
+        .n = 1, .h = input_height, .w = input_width, .c = channels,
+    }};
+    const cmsis_nn_dims filter_dimensions = {{
+        .n = 1, .h = kernel_height, .w = kernel_width, .c = channels,
+    }};
+    const cmsis_nn_dims output_dimensions = {{
+        .n = 1, .h = output_height, .w = output_width, .c = channels,
+    }};
+    (void){cmsis_function}(
+        &cmsis_context, &parameters,
+        &input_dimensions, input,
+        &filter_dimensions, &output_dimensions, output);
+}}""",
+    )
 
 
 def _average_kernel(context: StepEmitContext) -> KernelEmission:
@@ -316,7 +481,30 @@ def _call(
 @emit_step.register
 def _emit_average_pool(step: AveragePool2DStep, context: StepEmitContext) -> StepEmission:
     implementation = _PORTABLE_AVERAGE_ID if context.selection is None else context.selection.kernel_id
-    if implementation == _CORTEX_M4_GLOBAL_AVERAGE_ID:
+    if implementation in ESP_NN_AVERAGE_POOL_IDS.values():
+        kernel, call = esp_nn_pool_emission(step, context)
+    elif implementation == _CMSIS_NN_AVERAGE_ID:
+        function = f"{context.symbol}_average_pool2d_cmsis_nn_s8"
+        input_type = context.plan.tensors[step.input].tensor_type
+        output_type = context.plan.tensors[step.output].tensor_type
+        _, input_h, input_w, channels = input_type.shape
+        _, output_h, output_w, _ = output_type.shape
+        kernel_h, kernel_w = step.kernel
+        stride_h, stride_w = step.stride
+        pad_top, _, pad_left, _ = step.padding
+        scratch_size = 0 if context.selection is None else context.selection.scratch_size
+        scratch_pointer = context.scratch_pointer if scratch_size else "NULL"
+        call = f"""    {function}(
+        {context.pointer(step.input, mutable=False)},
+        {context.pointer(step.output, mutable=True)},
+        {scratch_pointer}, {scratch_size},
+        {input_h}, {input_w}, {channels},
+        {output_h}, {output_w},
+        {kernel_h}, {kernel_w}, {stride_h}, {stride_w},
+        {pad_top}, {pad_left},
+        {step.activation_min}, {step.activation_max});"""
+        kernel = _cmsis_pool_kernel(context, average=True)
+    elif implementation == _CORTEX_M4_GLOBAL_AVERAGE_ID:
         function = f"{context.symbol}_global_average_pool2d_s8"
         input_type = context.plan.tensors[step.input].tensor_type
         qparams = input_type.qparams
@@ -351,7 +539,28 @@ def _emit_average_pool(step: AveragePool2DStep, context: StepEmitContext) -> Ste
 @emit_step.register
 def _emit_max_pool(step: MaxPool2DStep, context: StepEmitContext) -> StepEmission:
     implementation = _PORTABLE_MAX_ID if context.selection is None else context.selection.kernel_id
-    if implementation == _CORTEX_M4_MAX_2X2_ID:
+    if implementation in ESP_NN_MAX_POOL_IDS.values():
+        kernel, call = esp_nn_pool_emission(step, context)
+    elif implementation == _CMSIS_NN_MAX_ID:
+        function = f"{context.symbol}_max_pool2d_cmsis_nn_s8"
+        input_type = context.plan.tensors[step.input].tensor_type
+        output_type = context.plan.tensors[step.output].tensor_type
+        _, input_h, input_w, channels = input_type.shape
+        _, output_h, output_w, _ = output_type.shape
+        kernel_h, kernel_w = step.kernel
+        stride_h, stride_w = step.stride
+        pad_top, _, pad_left, _ = step.padding
+        call = f"""    {function}(
+        {context.pointer(step.input, mutable=False)},
+        {context.pointer(step.output, mutable=True)},
+        NULL, 0,
+        {input_h}, {input_w}, {channels},
+        {output_h}, {output_w},
+        {kernel_h}, {kernel_w}, {stride_h}, {stride_w},
+        {pad_top}, {pad_left},
+        {step.activation_min}, {step.activation_max});"""
+        kernel = _cmsis_pool_kernel(context, average=False)
+    elif implementation == _CORTEX_M4_MAX_2X2_ID:
         function = f"{context.symbol}_max_pool2d_2x2_s2_s8"
         input_type = context.plan.tensors[step.input].tensor_type
         output_type = context.plan.tensors[step.output].tensor_type
