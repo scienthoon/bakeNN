@@ -259,6 +259,9 @@ input_q = bakenn.quantize_input(compiled.plan, input_fp32_nhwc)
 output_q = bakenn.run_reference(compiled.plan, input_q)
 ```
 
+For a runnable FP32 PyTorch -> PTQ -> ESP-NN -> self-contained ESP-IDF flow,
+see the [ESP32-S3 end-to-end demo](examples/esp32s3_end_to_end/README.md).
+
 The same pipeline is available as explicit inspectable stages:
 
 ```python

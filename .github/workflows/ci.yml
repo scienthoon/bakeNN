@@ -32,7 +32,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install ".[test,torch]"
-      - run: python -m pytest -q tests/p0/test_torch_capture.py tests/p0/test_ptq_graph.py tests/p0/test_torch_models_c.py
+      - run: >-
+          python -m pytest -q
+          tests/p0/test_torch_capture.py
+          tests/p0/test_ptq_graph.py
+          tests/p0/test_torch_models_c.py
+          tests/p3/test_esp32s3_demo.py
         env:
           CC: gcc
           BAKENN_REQUIRE_CC: "1"
