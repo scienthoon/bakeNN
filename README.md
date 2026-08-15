@@ -17,6 +17,8 @@ Conv2D graph. Those measurements demonstrate the generated-C path on one
 Cortex-M4 target; they are not a claim that every BakeNN model or every MCU is
 faster than TFLM. See the [physical FC result](benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md)
 and the [benchmark protocol](benchmarks/tflm_compare/README.md).
+The [evidence summary](benchmarks/RESULTS.md) separates physical measurements,
+host numerical tests and boardless target builds.
 
 ## Measured against TFLite Micro on nRF52840
 
