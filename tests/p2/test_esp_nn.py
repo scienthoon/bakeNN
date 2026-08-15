@@ -410,6 +410,7 @@ def test_esp_nn_bundle_and_esp_idf_project_are_pinned_and_self_contained(
         encoding="utf-8"
     )
     assert "CONFIG_NN_OPTIMIZED=1" in component_cmake
+    assert "CONFIG_IDF_TARGET_ESP32S3=1" in component_cmake
     assert "CONFIG_NN_SKIP_NUDGE" not in component_cmake
     assert "esp_nn_conv_esp32s3.c" in component_cmake
     assert "esp_nn_conv_s8_mult8_1x1_esp32s3.S" in component_cmake

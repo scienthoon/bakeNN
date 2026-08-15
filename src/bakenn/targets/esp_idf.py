@@ -52,7 +52,6 @@ def export_esp_idf_component(
     """Package generated model and pinned support sources as an ESP-IDF component."""
 
     descriptor, _ = _require_esp_target(artifacts, target)
-    del descriptor
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     files = (
@@ -106,8 +105,14 @@ def export_esp_idf_component(
         isinstance(item, dict) and item.get("name") == "ESP-NN"
         for item in dependencies
     )
+    idf_target_macro = {
+        "esp32": "CONFIG_IDF_TARGET_ESP32",
+        "esp32s3": "CONFIG_IDF_TARGET_ESP32S3",
+        "esp32c3": "CONFIG_IDF_TARGET_ESP32C3",
+    }[str(descriptor.metadata["idf_target"])]
     definitions = (
-        "target_compile_definitions(${COMPONENT_LIB} PRIVATE CONFIG_NN_OPTIMIZED=1)\n"
+        "target_compile_definitions(${COMPONENT_LIB} PRIVATE "
+        f"CONFIG_NN_OPTIMIZED=1 {idf_target_macro}=1)\n"
         if has_esp_nn
         else ""
     )
