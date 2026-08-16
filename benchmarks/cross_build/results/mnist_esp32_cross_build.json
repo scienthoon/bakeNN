@@ -10,6 +10,9 @@
   },
   "source": {
     "bakenn_version": "0.1.0",
+    "bakenn_commit_at_training": "5f1245eab8ef7a7d1ec9d5d2835ebad1ae2973f6",
+    "training_working_tree_dirty": false,
+    "training_performed": true,
     "checkpoint_file_sha256": "a2f08c02a718d2e6cbe590ad442891db04308a3c82a2c791b8e0fc02186ea498",
     "checkpoint_logical_sha256": "733130916e926da785afc63da0786d7613b0db808c3482398ae84b41ab706840",
     "calibration_corpus_sha256": "06ce2a1aaaa0f75e566b9494c17b3c1fce4063272d1ce4e879c24b868bbb4e29",

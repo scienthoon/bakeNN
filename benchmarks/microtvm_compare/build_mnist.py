@@ -789,6 +789,11 @@ def main() -> int:
         "performance_claim_permitted": False,
         "comparison": "BakeNN direct CMSIS-NN vs microTVM AOT+USMP+CMSIS-NN",
         "model": "trained MNISTNet full model",
+        "source": {
+            "bakenn_commit_at_training": evidence["source_commit"],
+            "training_working_tree_dirty": evidence["working_tree_dirty"],
+            "training_performed": evidence["training"]["performed"],
+        },
         "contract": {
             "batch": 1,
             "input_shape": [1, 28, 28, 1],

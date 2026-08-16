@@ -34,6 +34,15 @@ def test_microtvm_cross_build_evidence_is_complete_and_nonphysical() -> None:
     assert record["microtvm"]["workspace_size_bytes"] == 4064
     assert record["runtime"]["physical_cycles"]["status"] == "unmeasured"
 
+    mnist_evidence = json.loads(
+        (root / "examples/mnist/evidence/mnist_evidence.json").read_text()
+    )
+    assert record["source"] == {
+        "bakenn_commit_at_training": mnist_evidence["source_commit"],
+        "training_performed": True,
+        "training_working_tree_dirty": False,
+    }
+
     existing_input = root / "examples/mnist/evidence/physical_test_inputs_int8.bin"
     assert _sha256(existing_input) == record["contract"]["input_sha256"]
     expected = results / "mnist_common_expected_int8.bin"

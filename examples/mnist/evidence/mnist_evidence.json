@@ -113,7 +113,7 @@
       "bytes": 1534,
       "path": "mnist_report.json",
       "role": "host training, PTQ and accuracy report",
-      "sha256": "fb570f52fd59a870603ec03f5c28e73bd3d6a84417f62ee0cfb2dc7d765c1b2b"
+      "sha256": "681282c42ceea05945b5a51d63e8d14d1f75624c1df44cce0b9caf08414e2d4f"
     },
     {
       "bytes": 1000,
@@ -170,7 +170,7 @@
     "torch": "2.10.0",
     "torchvision": "0.25.0"
   },
-  "source_commit": "26844f1f2b9131338df0cc0f8c1b2513d96bfc6f",
+  "source_commit": "5f1245eab8ef7a7d1ec9d5d2835ebad1ae2973f6",
   "training": {
     "epochs": 4,
     "fp32_test_accuracy": 0.9692,
@@ -178,5 +178,5 @@
     "seed": 20260814,
     "training_samples": 60000
   },
-  "working_tree_dirty": true
+  "working_tree_dirty": false
 }

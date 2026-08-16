@@ -1,6 +1,6 @@
 {
   "artifacts": {
-    "evidence_set_sha256": "9436022b7f02156fb868e2a34f3c7a12a602a31566fa641e8a4bdb15e38d24f2",
+    "evidence_set_sha256": "ca2ba62d7a6d22d5ab5865b75d487709639260a28ff91fe1855468dbf9aed943",
     "files": [
       {
         "bytes": 9592,
@@ -15,7 +15,7 @@
       {
         "bytes": 2364,
         "path": "microtvm_codegen/metadata.json",
-        "sha256": "775dee139c85753980ad3e11f684e2661f2f81ed488b0d0562e24a0b0fadc283"
+        "sha256": "82898656bc944eb4a0b87deafbd6461d0d46dd465e205971f705afaf52d53fe6"
       },
       {
         "bytes": 9893,
@@ -30,7 +30,7 @@
       {
         "bytes": 3304,
         "path": "microtvm_codegen/mnist_lib1.c",
-        "sha256": "d7352270a6b0c87396f878968e47d6909592569b844608838b1d269b955421ef"
+        "sha256": "aa3f685cefdbd3402dfd19d55d201dd6e6f641577565c8dbc233a7d84268c8a3"
       },
       {
         "bytes": 6384,
@@ -89,7 +89,7 @@
       "data_bytes": 0,
       "elf_sha256": "999a3396775089cc34e11c35bce89f5cacca6bc63f052bc45834f33783db7723",
       "flash_load_bytes": 12088,
-      "map_sha256": "d38f7ba70df4b81f7db296ac75ee65730669f4782fd26329ab74353791409f73",
+      "map_sha256": "7d2dfc28447cb0e30cd7e6db530a0ad5a9e6a67fd8a71b641708850c02dc4912",
       "static_sram_bytes": 4864,
       "text_bytes": 12088
     },
@@ -98,7 +98,7 @@
       "data_bytes": 0,
       "elf_sha256": "be360f5bf04e863325c35a9c0da5dd849658d87cb0b60d066917ca8bf7577247",
       "flash_load_bytes": 17456,
-      "map_sha256": "fd3deda6912f9971c58571093eb4c69e76d406ddfff5261512879267e3460644",
+      "map_sha256": "c8f36c0adee2eff32f16d97448719fb7a3e6afa826dae47f46df0d74d9eaec59",
       "static_sram_bytes": 4862,
       "text_bytes": 17456,
       "usmp_workspace_bytes": 4064
@@ -132,7 +132,7 @@
     "mlf": {
       "bytes": 1177600,
       "path": "mnist_microtvm_mlf.tar",
-      "sha256": "082b7d18a00a9ad410c53e044a6be33089aa5abf795866a2d7955bb2f0d3ba8e"
+      "sha256": "f1f3678a440f8c882415b15d80616d1b26ee13f4eae4d030eed10a34442b6e39"
     },
     "runtime": "CRT",
     "target": "c -keys=arm_cpu,cpu -mcpu=cortex-m4",
@@ -161,6 +161,11 @@
     }
   },
   "schema_version": 1,
+  "source": {
+    "bakenn_commit_at_training": "5f1245eab8ef7a7d1ec9d5d2835ebad1ae2973f6",
+    "training_performed": true,
+    "training_working_tree_dirty": false
+  },
   "versions": {
     "apache_tvm": "0.16.0",
     "apache_tvm_source_archive_sha512": "e2d7f81ed87d184fdd20b7e1f2fd16bf7e15a52aea9c52fde95cb1444101e64588a8a1d0d360f3cd60d72cad01d619195ce45eefec7d07b6544888da8252609b",
