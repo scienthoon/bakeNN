@@ -170,6 +170,8 @@ def test_esp_idf_project_is_self_contained_and_target_checked(
     assert "uxTaskGetStackHighWaterMark" in runner
     assert "median_cycles=" in runner
     assert "p95_cycles=" in runner
+    assert "cpu_mhz=" in runner
+    assert "vTaskDelay(1)" in runner
     assert "INPUT_ZERO_POINT" in runner
     assert "BAKENN_OUTPUT_FNV1A" in runner
     assert "BAKENN_OUTPUT" in runner

@@ -92,6 +92,7 @@ def lower_to_plan(graph: QuantizedGraph, *, arena_alignment: int = 16) -> Execut
         scratch_offset=layout.scratch_offset,
         scratch_alignment=layout.scratch_alignment,
         alias_groups=layout.alias_groups,
+        lifetimes=layout.lifetimes,
     )
 
 

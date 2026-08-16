@@ -14,6 +14,7 @@ from bakenn.ir import QuantizedGraph
 from bakenn.passes import deduplicate_constants, fuse_clamps, legalize_graph
 from bakenn.plan import ExecutionPlan, lower_to_plan
 from bakenn.targets import PORTABLE_32, TargetDescriptor, resolve_target
+from bakenn.reporting import MemoryReport
 
 if TYPE_CHECKING:
     from bakenn.frontends.torch_export import FloatGraph
@@ -25,6 +26,10 @@ class CompiledModel:
     plan: ExecutionPlan
     artifacts: CompilationArtifacts
 
+    @property
+    def memory_report(self) -> MemoryReport:
+        return self.artifacts.memory_report
+
 
 @dataclass(frozen=True)
 class PTQCompiledModel:
@@ -34,6 +39,10 @@ class PTQCompiledModel:
     graph: QuantizedGraph
     plan: ExecutionPlan
     artifacts: CompilationArtifacts
+
+    @property
+    def memory_report(self) -> MemoryReport:
+        return self.artifacts.memory_report
 
 
 def compile(

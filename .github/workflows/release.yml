@@ -1,0 +1,105 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Match package version to tag
+        shell: bash
+        run: |
+          version="$(python -c 'from pathlib import Path; import re; print(re.search(r"VERSION = \"([^\"]+)\"", Path("src/bakenn/_version.py").read_text()).group(1))')"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+      - name: Build distributions
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          python -m twine check dist/*
+      - name: Verify installed wheel
+        shell: bash
+        run: |
+          python -m venv /tmp/bakenn-release-venv
+          /tmp/bakenn-release-venv/bin/python -m pip install --upgrade pip
+          /tmp/bakenn-release-venv/bin/python -m pip install dist/*.whl
+          cd /tmp
+          /tmp/bakenn-release-venv/bin/python -c 'import os, bakenn; expected = os.environ["GITHUB_REF_NAME"].removeprefix("v"); assert bakenn.__version__ == expected, (bakenn.__version__, expected); print(bakenn.__file__)'
+          /tmp/bakenn-release-venv/bin/python "${GITHUB_WORKSPACE}/examples/targets/generate_smoke.py" --target portable32 --output /tmp/bakenn-release-smoke
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -c /tmp/bakenn-release-smoke/generated/bknn_target_smoke.c -o /tmp/bakenn-release-smoke/model.o
+      - name: Build evidence and checksums
+        shell: bash
+        run: |
+          python scripts/build_release_evidence.py --output "dist/bakenn-${GITHUB_REF_NAME#v}-evidence.zip"
+          cd dist
+          sha256sum *.whl *.tar.gz *-evidence.zip > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: |
+            dist/*-evidence.zip
+            dist/*-evidence.zip.sha256
+            dist/SHA256SUMS
+          if-no-files-found: error
+
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/bakenn
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-distributions
+          path: dist
+      - name: Publish with OIDC and attestations
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+  publish-github:
+    needs: [build, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-distributions
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --title "BakeNN ${GITHUB_REF_NAME}" \
+            --notes-file ".github/release-notes/${GITHUB_REF_NAME}.md" \
+            dist/*

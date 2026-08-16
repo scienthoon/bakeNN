@@ -11,6 +11,7 @@ from .quantization.ptq_graph import (
     quantize_float_graph,
 )
 from .reference import dequantize_output, quantize_input, run_reference
+from .reporting import MemoryReport, build_memory_report
 from .targets import (
     KernelCostMeasurement,
     TARGET_PROFILES,
@@ -36,6 +37,7 @@ __all__ = [
     "KernelPolicy",
     "KernelCostMeasurement",
     "LinearWeightGranularity",
+    "MemoryReport",
     "BakeNNError",
     "PTQCompiledModel",
     "PTQOptions",
@@ -45,6 +47,7 @@ __all__ = [
     "TargetDescriptor",
     "ZephyrProject",
     "build_freestanding_elf",
+    "build_memory_report",
     "compile",
     "compile_torch_ptq",
     "dequantize_output",

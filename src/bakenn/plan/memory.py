@@ -8,7 +8,7 @@ from typing import Mapping, Sequence
 from bakenn.errors import CompileError
 from bakenn.ir import TensorType
 from bakenn.ir.types import TARGET_SIZE_MAX
-from .types import AliasKind, AliasSpec, ExecutionStep, PlanTensor, Storage
+from .types import AliasKind, AliasSpec, BufferLifetime, ExecutionStep, PlanTensor, Storage
 
 
 def _align_up(value: int, alignment: int) -> int:
@@ -22,19 +22,6 @@ def _power_of_two(value: object, description: str) -> int:
     if normalized <= 0 or normalized & (normalized - 1):
         raise CompileError(f"{description} must be a positive power of two")
     return normalized
-
-
-@dataclass(frozen=True)
-class BufferLifetime:
-    birth: int
-    death: int
-
-    def __post_init__(self) -> None:
-        if self.birth < 0 or self.death <= self.birth:
-            raise ValueError("buffer lifetimes must be non-empty half-open intervals")
-
-    def overlaps(self, other: BufferLifetime) -> bool:
-        return self.birth < other.death and other.birth < self.death
 
 
 @dataclass(frozen=True)

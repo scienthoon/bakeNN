@@ -4,27 +4,102 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
-BakeNN is a new, independent INT8 AOT compiler core for fixed-model MCU
-products. It converts an already-trained FP32 model plus representative
-calibration data into a model-specialized, heap-free standalone C11 library.
+BakeNN compiles an already-trained FP32 PyTorch model and representative
+calibration samples into a model-specialized, heap-free standalone C11 library
+for fixed-model MCU firmware.  It does not require TFLite, FlatBuffers or an
+interpreter on the target.
 
-This directory does not depend on the legacy power-of-two implementation or on
-TFLite. The current host-tested surface supports static batch-one classifiers,
-depthwise/residual/SE blocks, and fixed-resolution encoder-decoder graphs.
-Unsupported semantics fail during host compilation; there is no deployment-time
-float fallback.
+## Install
 
-The implementation baseline compiles MobileNetV3, MobileNetV2, EfficientNet-
-Lite-style, residual and compact U-Net graphs end to end. A physical
-nRF52840DK comparison is checked in for a fixed FC graph and a standalone
-Conv2D graph. Those measurements demonstrate the generated-C path on one
-Cortex-M4 target; they are not a claim that every BakeNN model or every MCU is
-faster than TFLM. See the [physical FC result](benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md)
-and the [benchmark protocol](benchmarks/tflm_compare/README.md).
-The [evidence summary](benchmarks/RESULTS.md) separates physical measurements,
-host numerical tests and boardless target builds.
+```bash
+python -m pip install "bakenn[torch]"
+```
 
-## Measured against TFLite Micro on nRF52840
+Python 3.10--3.12 is supported.  `torch` is needed only for the PyTorch
+frontend; generated firmware has no Python or framework dependency.
+
+## Ten-line quickstart
+
+```python
+import bakenn
+
+model.eval()
+compiled = bakenn.compile_torch_ptq(
+    model, example_input, calibration_samples,
+    "build/classifier", name="classifier",
+)
+input_q = bakenn.quantize_input(compiled.plan, input_fp32_nhwc)
+output_q = bakenn.run_reference(compiled.plan, input_q)
+print(compiled.memory_report.to_text())
+```
+
+`example_input` fixes the batch-one input shape.  Calibration samples measure
+the FP32 activation ranges used to choose INT8 scales and zero points; BakeNN
+then verifies the integer graph and emits the deployment library.
+
+## Generated artifacts
+
+Each compilation directory contains inspectable, deterministic artifacts:
+
+```text
+bknn_classifier.h                 public C ABI, shapes and I/O qparams
+bknn_classifier.c                 fixed execution order and static offsets
+bknn_classifier_weights.c/.h      quantized constants
+bknn_classifier_kernels.c/.h      only the selected kernels
+bknn_classifier_manifest.json     graph, qparams, kernel IDs and provenance
+bknn_classifier_memory.txt/.json  Flash/SRAM planning report
+```
+
+Target overlays additionally copy only the selected pinned CMSIS-NN or ESP-NN
+source closure and its license.  The generated library uses caller-owned
+input, output and arena buffers; it performs no heap allocation.
+
+## Why use BakeNN for fixed-model firmware?
+
+- **No target interpreter:** compile the generated portable C11 with a new
+  MCU's C compiler, or opt into a verified target kernel overlay.
+- **Static model specialization:** shapes, padding, qparams, fixed-point
+  multipliers, memory offsets and execution order are constants, enabling
+  fusion, buffer reuse, packed weights and narrow vendor-kernel calls.
+- **Compile-time memory gates:** activation arena, scratch, constants and
+  alignment are known before flashing.  CI can reject a model that exceeds a
+  declared Flash/SRAM budget.
+- **Auditable firmware:** the final C calls, weights, kernel choices and
+  manifest expose the model structure without reconstructing a FlatBuffer,
+  resolver, interpreter and runtime tensor planner.
+- **Fail-closed conversion:** unsupported operations, incompatible qparams,
+  unsafe accumulator bounds and budget violations fail on the host; there is
+  no target-side float fallback.
+
+The tradeoff is deliberate: BakeNN uses static batch one, fixed shapes and one
+public input/output, and supports fewer operators than TFLM.  Those are product
+constraints for firmware that rebuilds when its linked model changes, not an
+attempt to provide a dynamic model runtime.  See [STABILITY.md](STABILITY.md)
+for the compatibility policy.
+
+## Physical benchmark summary
+
+These are scoped physical measurements, not a claim that BakeNN wins for every
+model or MCU.  All compared output bytes were identical; the full protocols,
+hashes, raw UART and limitations are checked in under `benchmarks/`.
+
+### Original ESP32: trained MobileNetV2-0.25
+
+The same one-epoch CIFAR-10 checkpoint, calibration set, frozen INT8 graph,
+real-zero input, 240 MHz clock, eight warmups and 101 measured runs were used.
+
+| Path | Median latency | App binary | Linked DRAM |
+|---|---:|---:|---:|
+| BakeNN portable C | 285.546 ms | 459,088 B | 31,900 B |
+| BakeNN + ESP-NN | **97.685 ms** | **465,296 B** | **31,900 B** |
+| TFLM + ESP-NN | 98.891 ms | 665,504 B | 95,332 B |
+
+For this artifact, direct BakeNN-to-ESP-NN lowering was 2.92x faster than
+portable C and had 1.22% lower latency than TFLM+ESP-NN.  Relative to TFLM it
+reduced the app binary by 30.1% and linked DRAM by 66.5%.  See the
+[full ESP32 comparison](benchmarks/esp32/results/mobilenet_v2_025_cifar10_esp32_tflm_espnn.md).
+
+### nRF52840: direct CMSIS-NN versus TFLM
 
 In this document, the MCU comparison target is TensorFlow Lite for
 Microcontrollers (TFLM), not the mobile/Linux LiteRT runtime.
@@ -61,7 +136,7 @@ and [standalone Conv2D report](benchmarks/tflm_compare/results/iotlab_447609_con
 for the exact toolchain, protocol, hashes and limitations. These measurements
 are evidence for the frozen workloads on this board, not a universal ranking.
 
-## Why BakeNN can be better for fixed-model firmware
+## How the static AOT design works
 
 TFLM stores a quantized graph in a FlatBuffer and executes it through a
 MicroInterpreter, an operator resolver, runtime tensor metadata and a tensor
@@ -263,8 +338,33 @@ input_q = bakenn.quantize_input(compiled.plan, input_fp32_nhwc)
 output_q = bakenn.run_reference(compiled.plan, input_q)
 ```
 
+Every compilation also emits a deterministic human-readable and JSON memory
+report. It exposes selected kernels, activation lifetimes, physical arena
+reuse, backend scratch and the exact constant payload without presenting them
+as whole-firmware measurements:
+
+```python
+print(compiled.memory_report.to_text())
+
+print(compiled.artifacts.memory_report_text)  # bknn_classifier_memory.txt
+print(compiled.artifacts.memory_report_json)  # bknn_classifier_memory.json
+```
+
+The compile-time report distinguishes values known by AOT planning from final
+Flash/load sections that require a target ELF/map and peak stack/full-firmware
+SRAM that require target analysis or physical measurement. Caller-owned input
+and output buffers are reported separately from the model arena.
+
 For a runnable FP32 PyTorch -> PTQ -> ESP-NN -> self-contained ESP-IDF flow,
 see the [ESP32-S3 end-to-end demo](examples/esp32s3_end_to_end/README.md).
+For a trained representative model, the
+[MobileNetV2-0.25 CIFAR-10 example](examples/mobilenet_v2_cifar10/README.md)
+trains the full torchvision topology, measures FP32 and generated-C INT8
+accuracy, verifies Python/C bytes, and packages the same graph for ESP32-S3.
+Its [recorded one-epoch result](examples/mobilenet_v2_cifar10/RESULTS.md)
+measured 21.10% FP32 and 20.95% generated-C INT8 accuracy over all 10,000 test
+images; this is an end-to-end pipeline result, not a competitive training
+benchmark.
 
 The same pipeline is available as explicit inspectable stages:
 
@@ -390,8 +490,9 @@ on ESP32 and ESP32-S3 and its portable fallback on ESP32-C3. Physical cycle
 evidence currently covers the
 nRF52840DK/Cortex-M4 benchmark in
 [`benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md`](benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md);
-no ESP or whole-firmware energy result is claimed. See [the target-layer
-contract](docs/TARGETS.md).
+the original ESP32 MobileNetV2 comparison is recorded under
+[`benchmarks/esp32/results`](benchmarks/esp32/results). ESP32-S3 SIMD cycles
+and whole-firmware energy remain unmeasured. See [the target-layer contract](docs/TARGETS.md).
 
 `AUTO` currently means "select an applicable verified specialization". It is
 not a target cost model and does not promise lower latency, Flash, or energy.
@@ -405,9 +506,9 @@ PYTHONPATH=src python benchmarks/host_linear_compare.py --kernel conv1x1
 PYTHONPATH=src python benchmarks/host_linear_compare.py --kernel depthwise3x3
 ```
 
-Host results are regression evidence. The separate IoT-LAB result is the only
-current MCU/TFLM performance evidence and is explicitly limited to its frozen
-model, board, compiler and protocol.
+Host results are regression evidence. The separate nRF52840 and original-ESP32
+results are the current physical MCU/TFLM performance evidence and are each
+explicitly limited to their frozen model, board, compiler and protocol.
 
 The framework frontend captures through the real `torch.export` API and imports
 PyTorch only when used. It produces immutable BakeNN-owned types immediately;
@@ -460,3 +561,8 @@ See [the P0 blueprint](docs/P0_BLUEPRINT.md) for the exact supported contract
 and [the P2 kernel architecture](docs/P2_KERNEL_ARCHITECTURE.md) for selection,
 fixed-point and packing contracts. The ordered post-baseline work and its
 acceptance gates are tracked in [the roadmap](docs/ROADMAP.md).
+
+Release and project policies: [stability](STABILITY.md),
+[reproducing results](REPRODUCING.md), [third-party notices](THIRD_PARTY_NOTICES.md),
+[changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md), and
+[security](SECURITY.md).

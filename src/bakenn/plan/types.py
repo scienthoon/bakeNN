@@ -27,6 +27,21 @@ class AliasKind(str, Enum):
 
 
 @dataclass(frozen=True)
+class BufferLifetime:
+    """Half-open execution-step interval for one physical arena buffer."""
+
+    birth: int
+    death: int
+
+    def __post_init__(self) -> None:
+        if self.birth < 0 or self.death <= self.birth:
+            raise ValueError("buffer lifetimes must be non-empty half-open intervals")
+
+    def overlaps(self, other: "BufferLifetime") -> bool:
+        return self.birth < other.death and other.birth < self.death
+
+
+@dataclass(frozen=True)
 class AliasSpec:
     """Declare that one step output shares physical storage with an input."""
 
@@ -159,6 +174,7 @@ class ExecutionPlan:
     scratch_offset: int | None = None
     scratch_alignment: int = 1
     alias_groups: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    lifetimes: Mapping[str, BufferLifetime] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         tensors = MappingProxyType(dict(self.tensors))
@@ -178,6 +194,7 @@ class ExecutionPlan:
         alias_groups = MappingProxyType(
             {name: tuple(members) for name, members in self.alias_groups.items()}
         )
+        lifetimes = MappingProxyType(dict(self.lifetimes))
         if self.arena_alignment <= 0 or self.arena_alignment & (self.arena_alignment - 1):
             raise CompileError("arena alignment must be a positive power of two")
         if self.scratch_alignment <= 0 or self.scratch_alignment & (self.scratch_alignment - 1):
@@ -240,17 +257,29 @@ class ExecutionPlan:
                 raise CompileError(
                     f"execution step {step.name} references unknown tensors: {sorted(unknown)}"
                 )
+        arena_roots = {
+            name for name, tensor in tensors.items() if tensor.storage is Storage.ARENA
+        }
+        if lifetimes and set(lifetimes) != arena_roots:
+            raise CompileError("execution-plan lifetimes must exactly describe arena roots")
+        for name, lifetime in lifetimes.items():
+            if not isinstance(lifetime, BufferLifetime):
+                raise CompileError(f"execution-plan lifetime for {name} has an invalid type")
+            if lifetime.death > len(steps):
+                raise CompileError(f"execution-plan lifetime for {name} exceeds the step schedule")
         object.__setattr__(self, "tensors", tensors)
         object.__setattr__(self, "constants", MappingProxyType(constants))
         object.__setattr__(self, "steps", steps)
         object.__setattr__(self, "inputs", tuple(self.inputs))
         object.__setattr__(self, "outputs", tuple(self.outputs))
         object.__setattr__(self, "alias_groups", alias_groups)
+        object.__setattr__(self, "lifetimes", lifetimes)
 
 
 __all__ = [
     "AliasKind",
     "AliasSpec",
+    "BufferLifetime",
     "ExecutionPlan",
     "ExecutionStep",
     "LinearStep",

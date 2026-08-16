@@ -43,14 +43,23 @@ ESP-NN 1.2.6 is pinned at revision
 
 | Target/path | Numerical evidence | Toolchain evidence | Physical cycles |
 |---|---|---|---|
-| ESP32 optimized Conv/Depthwise | 10,000 random and edge tensors through official optimized C, zero byte mismatches | ESP-IDF 5.5 project builds and links | unmeasured |
+| ESP32 trained MobileNetV2-0.25, BakeNN portable | board output matches Python INT8 reference | ESP-IDF 5.5.4, Xtensa GCC 14.2.0 | 68,531,150 cycles / 285.546 ms median |
+| ESP32 trained MobileNetV2-0.25, BakeNN + ESP-NN | board output matches Python INT8 reference | ESP-IDF 5.5.4, ESP-NN 1.2.6 | **23,444,506 cycles / 97.685 ms median** |
+| ESP32 trained MobileNetV2-0.25, TFLM + ESP-NN | board output matches desktop LiteRT and BakeNN reference | TFLM 1.4.0, ESP-NN 1.2.6 | 23,733,948 cycles / 98.891 ms median |
 | ESP32-S3 SIMD Conv/Depthwise/FC/Pool | 10,000 random and edge tensors per graph through the official ANSI oracle, zero byte mismatches | real Xtensa S3 sources compile and link in ESP-IDF 5.5 | unmeasured |
 | ESP32-C3 portable fallback | shared Python-reference/portable-C differential suite | ESP-IDF 5.5 project builds and links | unmeasured |
+
+All three original-ESP32 paths used the same frozen graph, real-zero INT8
+input, 240 MHz clock, 8 warmups and 101 measured runs. BakeNN+ESP-NN was 1.22%
+lower latency than TFLM+ESP-NN for this artifact, while its app binary was
+465,296 B versus 665,504 B and linked DRAM was 31,900 B versus 95,332 B. The
+[full three-way report](esp32/results/mobilenet_v2_025_cifar10_esp32_tflm_espnn.md)
+records model, output bytes, toolchains, hashes and limitations.
 
 The boardless target proof is GitHub Actions run
 [`31897480108`](https://github.com/scienthoon/bakeNN/actions/runs/31897480108)
 at commit `f1fd64f`: ESP32, ESP32-S3 and ESP32-C3 all built successfully. A
-physical ESP32-S3 is still required before publishing SIMD cycle, cache or
+physical ESP32-S3 is still required before publishing S3 SIMD cycle, cache or
 energy claims. The generated ESP-IDF runner already prints first/median/p95
 cycles, output checksum and FreeRTOS stack watermark, so no compiler change is
 needed for that measurement.

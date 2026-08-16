@@ -1,0 +1,16 @@
+Source commit: 59d3d2f3d9e6f80065e42999a816b99c49fb2ddf-dirty
+Board: ESP32-D0WDQ6 revision v1.1, 240 MHz
+Runtime: espressif/esp-tflite-micro 1.4.0 + espressif/esp-nn 1.2.6
+Model SHA256: 5838566357d5b071b7efe942aeca56da2c8ec6d976a62b7906ed747a8575f7ee
+
+TFLM target=esp32 cpu_mhz=240 first_cycles=23665218 median_cycles=23733948 p95_cycles=23733948 stack_high_water_words=14428 arena_reserved=81920 arena_used=81436 input_zero_point=-5 mismatches=0
+TFLM_OUTPUT_FNV1A=0x6cc8e3fb
+TFLM_OUTPUT 36 -16 98 54 63 17 30 5 0 -27
+
+ESP-IDF size:
+Flash Data 463052 bytes
+Flash Code 141136 bytes
+DRAM 95332 bytes
+IRAM 46303 bytes
+Total image 660311 bytes
+App binary 665504 bytes

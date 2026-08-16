@@ -1,0 +1,16 @@
+include CHANGELOG.md
+include CODE_OF_CONDUCT.md
+include CONTRIBUTING.md
+include LICENSE
+include README.md
+include REPRODUCING.md
+include SECURITY.md
+include STABILITY.md
+include THIRD_PARTY_NOTICES.md
+recursive-include benchmarks *.csv *.json *.md *.py *.txt
+recursive-include docs *.md
+recursive-include examples *.md *.py *.txt
+recursive-include scripts *.py
+prune build
+prune dist
+global-exclude __pycache__ *.py[cod] .DS_Store

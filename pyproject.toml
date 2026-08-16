@@ -44,6 +44,7 @@ where = ["src"]
   "cmsis_nn/Source/NNSupportFunctions/*.c",
   "cmsis_nn/Source/PoolingFunctions/*.c",
   "cmsis_nn/LICENSE.txt",
+  "cmsis_nn/BAKENN_PROVENANCE.md",
   "cmsis_core/Include/*.h",
   "cmsis_core/LICENSE.txt",
 ]

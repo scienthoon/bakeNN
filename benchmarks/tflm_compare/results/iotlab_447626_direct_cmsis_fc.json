@@ -1,0 +1,79 @@
+{
+  "benchmark_id": "iotlab-447626-direct-cmsis-nn-fc",
+  "compiler": {
+    "flags": [
+      "CONFIG_SPEED_OPTIMIZATIONS=y (-O2)",
+      "-ffunction-sections",
+      "-fdata-sections",
+      "-Wl,--gc-sections",
+      "BAKENN_CMSIS_NN_BUILTIN_MEMORY"
+    ],
+    "linker_script": "Zephyr 2.7.5 nrf52840dk_nrf52840 linker.cmd; the original map file was not retained",
+    "name": "arm-zephyr-eabi-gcc",
+    "version": "arm-zephyr-eabi-gcc (crosstool-NG 1.24.0.378_e011758) 10.3.0; Zephyr SDK 0.13.1"
+  },
+  "implementations": {
+    "bakenn": {
+      "metrics": {
+        "elf_flash_data_load_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_rodata_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_text_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_total_bytes": {"reason": null, "status": "measured", "value": 20920},
+        "inference_median_cycles": {"reason": null, "status": "measured", "value": 3786},
+        "inference_p95_cycles": {"reason": null, "status": "measured", "value": 3786},
+        "init_cycles": {"reason": "Reset-through-ready initialization was not enclosed by the target counter.", "status": "unmeasured", "value": null},
+        "output_compared_bytes": {"reason": null, "status": "measured", "value": 4},
+        "output_max_abs_error_lsb": {"reason": null, "status": "measured", "value": 0},
+        "output_mismatched_bytes": {"reason": null, "status": "measured", "value": 0},
+        "peak_sram_arena_bytes": {"reason": null, "status": "measured", "value": 16},
+        "peak_sram_runtime_metadata_bytes": {"reason": "No interpreter is linked, but whole-firmware runtime metadata was not separately instrumented.", "status": "unmeasured", "value": null},
+        "peak_sram_stack_bytes": {"reason": "The runner recorded 3584 unused current-thread stack bytes, not simultaneous whole-firmware peak stack.", "status": "unmeasured", "value": null},
+        "peak_sram_static_data_bytes": {"reason": "The ELF links 8540 SRAM bytes, but this is a reservation rather than a measured simultaneous peak.", "status": "unmeasured", "value": null},
+        "peak_sram_total_bytes": {"reason": "A simultaneous whole-firmware SRAM peak was not instrumented.", "status": "unmeasured", "value": null}
+      },
+      "source_revision": "BakeNN base c948a87e007f1cd30e3dd698486fa85a7d7f7bd4 plus the then-uncommitted direct CMSIS-NN backend; exact ELF SHA-256 5e395fbfca1a8e73c08cde7723409d29aef53f9fde3fdbb669a962aa247eaf2b",
+      "version": "BakeNN 0.1.0 direct CMSIS-NN v4 FullyConnected backend"
+    },
+    "tflm": {
+      "metrics": {
+        "elf_flash_data_load_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_rodata_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_text_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_total_bytes": {"reason": null, "status": "measured", "value": 69640},
+        "inference_median_cycles": {"reason": null, "status": "measured", "value": 5418},
+        "inference_p95_cycles": {"reason": null, "status": "measured", "value": 5418},
+        "init_cycles": {"reason": "AllocateTensors/reset-through-ready initialization was not enclosed by the target counter.", "status": "unmeasured", "value": null},
+        "output_compared_bytes": {"reason": null, "status": "measured", "value": 4},
+        "output_max_abs_error_lsb": {"reason": null, "status": "measured", "value": 0},
+        "output_mismatched_bytes": {"reason": null, "status": "measured", "value": 0},
+        "peak_sram_arena_bytes": {"reason": null, "status": "measured", "value": 1024},
+        "peak_sram_runtime_metadata_bytes": {"reason": "TFLM reported 580 arena bytes used, but persistent metadata was not separated from activation storage.", "status": "unmeasured", "value": null},
+        "peak_sram_stack_bytes": {"reason": "The runner recorded 3400 unused current-thread stack bytes, not simultaneous whole-firmware peak stack.", "status": "unmeasured", "value": null},
+        "peak_sram_static_data_bytes": {"reason": "The ELF links 11040 SRAM bytes, but this is a reservation rather than a measured simultaneous peak.", "status": "unmeasured", "value": null},
+        "peak_sram_total_bytes": {"reason": "A simultaneous whole-firmware SRAM peak was not instrumented.", "status": "unmeasured", "value": null}
+      },
+      "source_revision": "TFLM 9156d050927012da87079064db59d07f03b8baf6; CMSIS-NN ca5dc34313be2ee5c46652917c30baac96c52621; exact ELF SHA-256 87509fa5cbba1e768ad3eb7485c0c098041ac24856eedce08674cfe9afd515b5",
+      "version": "TFLM Zephyr selective resolver with CMSIS-NN v4 FullyConnected"
+    }
+  },
+  "model": {
+    "artifact_sha256": "3ae5e6f8df9c0094aed6d98a9d89e9bd71d4c88400fb977fa99917cfc0a89653",
+    "input_sha256": "a2c6cb39ea5a7ad89edf34c07004b85a05ceef6b1480c549da6b328b31def097",
+    "name": "INT8 MLP 32x16x4; one 32-byte input tensor at affine zero-point -3"
+  },
+  "protocol": {
+    "cycle_counter": "Zephyr timing_counter_get/timing_cycles_get over generated model call or TFLM Invoke",
+    "input_count": 1,
+    "interrupt_policy": "Default Zephyr interrupts remained enabled; all 101 timed samples were identical within each implementation.",
+    "measured_runs": 101,
+    "warmup_runs": 8
+  },
+  "schema_version": 1,
+  "target": {
+    "architecture": "Armv7E-M Cortex-M4F, Thumb-2 DSP, 64 MHz",
+    "board": "FIT IoT-LAB nrf52840dk-1.saclay.iot-lab.info, experiment 447626",
+    "clock_hz": 64000000,
+    "mcu": "Nordic nRF52840"
+  },
+  "timestamp_utc": "2026-08-14T20:33:19Z"
+}
