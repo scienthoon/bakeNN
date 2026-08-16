@@ -191,19 +191,24 @@ void app_main(void) {{
     const uint32_t first_cycles = esp_cpu_get_cycle_count() - start;
     for (uint32_t run = 0u; run < 8u; ++run) {{
         {symbol}_infer(arena, model_input, model_output);
+        /* Let the per-core idle task service the task watchdog between runs. */
+        vTaskDelay(1);
     }}
     for (uint32_t run = 0u; run < 101u; ++run) {{
         start = esp_cpu_get_cycle_count();
         {symbol}_infer(arena, model_input, model_output);
         measured_cycles[run] = esp_cpu_get_cycle_count() - start;
+        /* The delay is outside the measured interval. */
+        vTaskDelay(1);
     }}
     sort_cycles();
     const UBaseType_t stack_words_free = uxTaskGetStackHighWaterMark(NULL);
 
-    printf("BAKENN target=%s first_cycles=%" PRIu32
+    printf("BAKENN target=%s cpu_mhz=%u first_cycles=%" PRIu32
            " median_cycles=%" PRIu32 " p95_cycles=%" PRIu32
            " stack_high_water_words=%" PRIu32 " arena=%u\\n",
-           CONFIG_IDF_TARGET, first_cycles, measured_cycles[50],
+           CONFIG_IDF_TARGET, (unsigned)CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ,
+           first_cycles, measured_cycles[50],
            measured_cycles[95], (uint32_t)stack_words_free,
            (unsigned){macro}_ARENA_SIZE);
     printf("BAKENN_OUTPUT_FNV1A=0x%08" PRIx32 "\\n", output_checksum());

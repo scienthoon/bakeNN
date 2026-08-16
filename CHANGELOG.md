@@ -3,7 +3,7 @@
 All notable changes are recorded here. BakeNN follows semantic versioning once
 its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 
-## 0.1.0 - unreleased
+## 0.1.0 - 2026-08-16
 
 ### Added
 
@@ -17,7 +17,14 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
   Conv/Depthwise support for ESP32, with ESP32-C3 portable fallback;
 - self-contained Zephyr, freestanding GNU and ESP-IDF target projects;
 - physical nRF52840 BakeNN-versus-TFLM benchmark reports;
-- deterministic FP32-to-ESP32-S3 end-to-end demo.
+- deterministic FP32-to-ESP32-S3 end-to-end demo;
+- deterministic text and JSON memory reports with activation lifetimes, arena
+  reuse, selected-kernel scratch, target-budget headroom and explicit
+  post-link/physical-measurement boundaries;
+- trained MobileNetV2 physical ESP32 measurements for portable C, direct
+  ESP-NN and TFLM+ESP-NN with byte-exact output evidence;
+- deterministic release-evidence archives, PyPI Trusted Publishing workflow,
+  stability policy, third-party notices and reproduction guide.
 
 ### Intentional constraints
 

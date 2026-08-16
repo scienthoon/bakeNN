@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-08-16T21:16:00+09:00",
+  "source": {
+    "base_commit": "59d3d2f3d9e6f80065e42999a816b99c49fb2ddf",
+    "working_tree": "dirty",
+    "branch": "agent/vendor-kernel-backends"
+  },
+  "board": {
+    "product_label": "PSRAM Type-C ESP32 CAM",
+    "chip": "ESP32-D0WDQ6",
+    "chip_revision": "v1.1",
+    "architecture": "Xtensa LX6",
+    "cores": 2,
+    "cpu_hz": 240000000,
+    "crystal_hz": 40000000,
+    "physical_flash_bytes": 4194304,
+    "firmware_header_flash_bytes": 2097152,
+    "psram_used": false
+  },
+  "toolchain": {
+    "esp_idf": "v5.5.4",
+    "compiler": "xtensa-esp-elf GCC 14.2.0",
+    "optimization": "ESP-IDF size profile; BakeNN model component -O2",
+    "flash_mode": "DIO",
+    "flash_frequency_hz": 40000000
+  },
+  "model": {
+    "name": "MobileNetV2 width_mult=0.25",
+    "task": "CIFAR-10 classification",
+    "input_shape_nchw": [1, 3, 32, 32],
+    "output_elements": 10,
+    "training": "one FP32 epoch over 50000 CIFAR-10 images",
+    "fp32_test_accuracy": 0.211,
+    "int8_generated_c_test_accuracy": 0.2095,
+    "accuracy_drop_percentage_points": 0.15,
+    "calibration_samples": 20,
+    "optimized_steps": 0,
+    "kernel_backend": "BakeNN portable C",
+    "arithmetic_profile": "bakenn.int8.v1"
+  },
+  "input": {
+    "description": "all 3072 input elements set to the affine INT8 zero-point",
+    "zero_point": -5,
+    "bytes": 3072
+  },
+  "latency": {
+    "warmup_runs": 8,
+    "measured_runs": 101,
+    "first_cycles": 68544543,
+    "median_cycles": 68531150,
+    "p95_cycles": 68531402,
+    "first_ms": 285.602263,
+    "median_ms": 285.546458,
+    "p95_ms": 285.547508,
+    "median_inferences_per_second": 3.502057,
+    "counter": "esp_cpu_get_cycle_count",
+    "scheduler_note": "vTaskDelay(1) follows each call and is outside the measured cycle interval"
+  },
+  "memory": {
+    "app_binary_bytes": 459088,
+    "elf_total_image_bytes": 458971,
+    "flash_data_bytes": 338824,
+    "flash_code_bytes": 64080,
+    "iram_bytes": 46247,
+    "dram_bytes": 31900,
+    "bakenn_activation_arena_bytes": 16384,
+    "bakenn_scratch_bytes": 0,
+    "stack_high_water_free_words": 6752,
+    "heap_used_by_generated_inference": false
+  },
+  "correctness": {
+    "python_reference_output_int8": [36, -16, 98, 54, 63, 17, 30, 5, 0, -27],
+    "board_output_int8": [36, -16, 98, 54, 63, 17, 30, 5, 0, -27],
+    "compared_output_bytes": 10,
+    "mismatched_output_bytes": 0,
+    "fnv1a_32": "0x6cc8e3fb"
+  },
+  "artifacts": {
+    "checkpoint_sha256": "534b473019bd539acac0eaf965330bb3342cde9655b207aa6eb3f9afc31e7f45",
+    "elf_sha256": "3eb6f8ff1d0a7229648ad0fa45920954f6eb85580b9b604d5c30f3c4d3160216",
+    "app_binary_sha256": "7ca4982bdc982d2393f04e7ce1c903da56cac07cedc99c2e69aba3a27decb55e"
+  },
+  "comparison": {
+    "esp_nn_over_portable_speedup": 2.923122,
+    "esp_nn_app_binary_delta_bytes": 6208,
+    "esp_nn_flash_code_delta_bytes": 6216,
+    "esp_nn_dram_delta_bytes": 0
+  },
+  "limitations": [
+    "The timed input is the quantized real-zero tensor, not a camera image.",
+    "The board product label mentions PSRAM, but this model neither enables nor uses PSRAM.",
+    "Accuracy is from a one-epoch demonstration checkpoint and is not a production accuracy claim."
+  ]
+}

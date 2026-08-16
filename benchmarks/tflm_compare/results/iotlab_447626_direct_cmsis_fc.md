@@ -5,6 +5,13 @@ weights, biases, fused hidden ReLU, raw input bytes, board, compiler, and cycle
 protocol. All four firmware images ran on the same Nordic nRF52840DK node in
 FIT IoT-LAB experiment `447626`.
 
+The [validated JSON](iotlab_447626_direct_cmsis_fc.json),
+[four-path CSV](iotlab_447626_direct_cmsis_fc.csv), and
+[raw UART transcript](iotlab_447626_direct_cmsis_fc_uart.txt) preserve the
+machine-readable result. This historical run used one input and a dirty
+BakeNN worktree; the exact linked ELFs are preserved by SHA-256, but the result
+must not be described as a clean `v0.1.0` multi-input measurement.
+
 ## Result
 
 | implementation | FC kernel path | median cycles | p95 cycles | linked Flash (`text+data`) | linked SRAM (`data+bss`) | model arena | output |

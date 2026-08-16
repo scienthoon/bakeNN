@@ -1,7 +1,7 @@
 # BakeNN P0 status
 
-Status: host implementation baseline complete; first Cortex-M4/TFLM evidence
-recorded for frozen workloads
+Status: host implementation baseline complete; Cortex-M4 and original-ESP32
+TFLM evidence recorded for frozen workloads
 
 This page separates code that exists and has automated coverage from release
 gates that still require integration or target evidence. Passing operator tests
@@ -24,11 +24,11 @@ does not imply that BakeNN is faster or smaller than TFLM.
 | FP32 PyTorch to C for all three release fixtures | Implemented and host-tested | TinyCNN, residual DS-CNN and Mobile block pass public `compile_torch_ptq`, dequantized FP32 smoke, integer reference, and strict sanitized generated C. |
 | Model-family expansion | Implemented and host-tested for the declared surface | Compact models cover MobileNetV3 SE, MobileNetV2, EfficientNet-style MBConv, U-Net decode/skip paths, ResNet bottleneck, DenseNet-style concat, Inception branches, SqueezeNet Fire, Conv1D flatten, temporal residual and Softmax MLP through sanitized generated C. Unmodified torchvision MobileNetV3-small/large, MobileNetV2, EfficientNet-B0 and MNASNet0.5 reach generated artifacts at 32x32. One-epoch MNIST/CIFAR accuracy and memory results are recorded in the training matrix. |
 | Constant-channel / degenerate-range handling | Implemented and host-tested | Zero dynamic range uses scale=1/zp=0. Zero-weight/nonzero-bias channels use an explicit output-domain scale/bias policy and exact v1 replay proof; the channel is retained rather than falsely reported as folded away. |
-| Generated resource manifest | Partially implemented | Reports constants, activation arena, scratch, I/O, layout, qparams and alignment; must still be reconciled with final target ELF/map and stack measurements. |
+| Generated resource manifest and memory report | Partially implemented | Emits deterministic JSON/text reports for constants, activation lifetimes, arena reuse, selected-kernel scratch, I/O and alignment. It explicitly leaves final Flash, whole-firmware SRAM and stack to target ELF/map or physical measurement. |
 | Target descriptors and cross-link | Implemented and host-tested | Versioned portable32, Cortex-M0+/M4, RV32IMC and ESP profiles. ARM/RISC-V freestanding ELF/map and symbol audits pass with real GNU embedded toolchains; Cortex-M4 disassembly contains the selected SMLAD instructions. Physical nRF52840 evidence is recorded for the FC and standalone Conv benchmark only. |
-| ESP-IDF packaging | Implemented; boardless CI encoded | Self-contained component/project and cycle/stack/output runner for ESP32/S3/C3. CI builds the ESP-NN Conv/Depthwise smoke on ESP32/S3 and the deterministic fallback on C3. Host tests execute original ESP32 optimized C and use the official ANSI oracle for S3 wrappers; physical ESP execution remains unverified. |
+| ESP-IDF packaging | Implemented; boardless CI and original-ESP32 evidence | Self-contained component/project and cycle/stack/output runner for ESP32/S3/C3. CI builds the ESP-NN Conv/Depthwise smoke on ESP32/S3 and the deterministic fallback on C3. A physical original ESP32 ran a trained MobileNetV2-0.25 through portable C, direct ESP-NN and TFLM+ESP-NN with identical output bytes. ESP32-S3 remains boardless-only. |
 | TFLM comparison harness | Implemented for first frozen workloads | Offline protocol, versioned result shape, dependency-free validator, TFLM FC/Conv runners and pinned CMSIS-NN build path. Physical result reports record identical FC outputs and a separate standalone Conv comparison. |
-| Physical MCU benchmark | **Partial evidence** | nRF52840DK/Cortex-M4 final ELF sizes, arena, median/p95 cycles and output checksums are measured for frozen FC and standalone Conv workloads. Full peak SRAM decomposition, initialization cycles, energy, other model families and other MCUs remain unmeasured. |
+| Physical MCU benchmark | **Partial evidence** | nRF52840DK/Cortex-M4 final ELF sizes, arena, median/p95 cycles and output checksums are measured for frozen FC and standalone Conv workloads. Original ESP32 MobileNetV2-0.25 portable/direct-ESP-NN/TFLM paths include cycles, linked resources and exact output checks. Full peak SRAM decomposition, initialization cycles, energy, ESP32-S3 and other models remain unmeasured. |
 | Wheel/clean install release gate | Passed locally; CI encoded | A built 0.1.0 wheel installed into a fresh venv and compiled/tested all three PyTorch-to-C fixtures from `site-packages`; the CI workflow repeats this gate. |
 
 ## Verified properties
@@ -66,13 +66,13 @@ does not imply that BakeNN is faster or smaller than TFLM.
 3. Measure the new direct CMSIS-NN Conv2D/Depthwise adapters against TFLM using
    identical kernels and frozen convolution-heavy models before making a
    same-kernel performance claim.
-4. Run the ESP-NN artifacts on physical ESP32 and ESP32-S3, record final ELF,
-   peak stack, output checksum and cycles, and only then introduce a measured
-   ESP target cost table or acceleration claim.
+4. Repeat the original-ESP32 measurement from a clean release tag with multiple
+   input tensors, and run ESP32-S3 physically before introducing a general ESP
+   target cost table or S3 acceleration claim.
 5. Re-run the clean-wheel, compiler/sanitizer and public-API gates after the
    target backend and comparison integration freeze.
 
 The compiler baseline is usable for the declared host-tested surface. The
-current TFLM speed claim is intentionally limited to the frozen nRF52840
-workloads in the checked-in reports; it must not be generalized to all models
-or targets.
+current speed claims are intentionally limited to the frozen nRF52840 and
+original-ESP32 workloads in the checked-in reports; they must not be
+generalized to all models or targets.

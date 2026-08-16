@@ -1,0 +1,5 @@
+I (0) cpu_start: App cpu up.
+I (0) cpu_start: cpu freq: 240000000 Hz
+BAKENN target=esp32 cpu_mhz=240 first_cycles=68544543 median_cycles=68531150 p95_cycles=68531402 stack_high_water_words=6752 arena=16384
+BAKENN_OUTPUT_FNV1A=0x6cc8e3fb
+BAKENN_OUTPUT 36 -16 98 54 63 17 30 5 0 -27

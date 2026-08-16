@@ -1,0 +1,12 @@
+I (28) boot: chip revision: v1.1
+I (31) boot.esp32: SPI Speed      : 40MHz
+I (35) boot.esp32: SPI Mode       : DIO
+I (38) boot.esp32: SPI Flash Size : 2MB
+I (281) cpu_start: cpu freq: 240000000 Hz
+I (292) app_init: App version:      59d3d2f-dirty
+I (301) app_init: ELF file SHA256:  816e96016...
+I (306) app_init: ESP-IDF:          v5.5.4
+BAKENN target=esp32 cpu_mhz=240 first_cycles=23479356 median_cycles=23444506 p95_cycles=23452255 stack_high_water_words=6752 arena=16384
+BAKENN_OUTPUT_FNV1A=0x6cc8e3fb
+BAKENN_OUTPUT 36 -16 98 54 63 17 30 5 0 -27
+I (11383) main_task: Returned from app_main()

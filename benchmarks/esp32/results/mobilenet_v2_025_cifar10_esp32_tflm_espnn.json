@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-08-16T22:00:08+09:00",
+  "source": {
+    "base_commit": "59d3d2f3d9e6f80065e42999a816b99c49fb2ddf",
+    "working_tree": "dirty",
+    "branch": "agent/vendor-kernel-backends"
+  },
+  "board": {
+    "product_label": "PSRAM Type-C ESP32 CAM",
+    "chip": "ESP32-D0WDQ6",
+    "chip_revision": "v1.1",
+    "architecture": "Xtensa LX6",
+    "cores": 2,
+    "cpu_hz": 240000000,
+    "crystal_hz": 40000000,
+    "physical_flash_bytes": 4194304,
+    "firmware_header_flash_bytes": 2097152,
+    "psram_used": false
+  },
+  "toolchain": {
+    "esp_idf": "v5.5.4",
+    "compiler": "xtensa-esp-elf GCC 14.2.0",
+    "tflm_component": "espressif/esp-tflite-micro 1.4.0",
+    "kernel_backend": "espressif/esp-nn 1.2.6",
+    "optimization": "ESP-IDF size profile; TFLM component -O3 with ESP_NN",
+    "flash_mode": "DIO",
+    "flash_frequency_hz": 40000000
+  },
+  "model": {
+    "name": "MobileNetV2 width_mult=0.25",
+    "task": "CIFAR-10 classification",
+    "input_shape_nchw": [1, 3, 32, 32],
+    "output_elements": 10,
+    "training": "one FP32 epoch over 50000 CIFAR-10 images",
+    "fp32_test_accuracy": 0.211,
+    "bakenn_int8_generated_c_test_accuracy": 0.2095,
+    "calibration_samples": 20,
+    "tflite_model_bytes": 413640,
+    "operators": {
+      "PADV2": 5,
+      "CONV_2D": 35,
+      "DEPTHWISE_CONV_2D": 17,
+      "ADD": 11,
+      "AVERAGE_POOL_2D": 1,
+      "RESHAPE": 1,
+      "FULLY_CONNECTED": 1
+    }
+  },
+  "input": {
+    "description": "all 3072 input elements set to the affine INT8 zero-point before every Invoke",
+    "zero_point": -5,
+    "bytes": 3072
+  },
+  "latency": {
+    "warmup_runs": 8,
+    "measured_runs": 101,
+    "first_cycles": 23665218,
+    "median_cycles": 23733948,
+    "p95_cycles": 23733948,
+    "first_ms": 98.605075,
+    "median_ms": 98.89145,
+    "p95_ms": 98.89145,
+    "median_inferences_per_second": 10.112098,
+    "counter": "esp_cpu_get_cycle_count",
+    "scheduler_note": "vTaskDelay(1) follows each Invoke and is outside the measured cycle interval"
+  },
+  "memory": {
+    "app_binary_bytes": 665504,
+    "elf_total_image_bytes": 660311,
+    "flash_data_bytes": 463052,
+    "flash_code_bytes": 141136,
+    "iram_bytes": 46303,
+    "dram_bytes": 95332,
+    "tensor_arena_reserved_bytes": 81920,
+    "tensor_arena_used_bytes": 81436,
+    "stack_high_water_free_words": 14428
+  },
+  "correctness": {
+    "bakenn_python_reference_output_int8": [36, -16, 98, 54, 63, 17, 30, 5, 0, -27],
+    "desktop_litert_builtin_ref_output_int8": [36, -16, 98, 54, 63, 17, 30, 5, 0, -27],
+    "board_tflm_output_int8": [36, -16, 98, 54, 63, 17, 30, 5, 0, -27],
+    "compared_output_bytes": 10,
+    "mismatched_output_bytes": 0,
+    "fnv1a_32": "0x6cc8e3fb"
+  },
+  "comparison": {
+    "bakenn_esp_nn_over_tflm_esp_nn_speedup": 1.012346,
+    "bakenn_esp_nn_latency_reduction_percent": 1.21953,
+    "tflm_esp_nn_over_bakenn_portable_speedup": 2.887474,
+    "tflm_app_binary_delta_vs_bakenn_esp_nn_bytes": 200208,
+    "tflm_flash_data_plus_code_delta_vs_bakenn_esp_nn_bytes": 195068,
+    "tflm_dram_delta_vs_bakenn_esp_nn_bytes": 63432
+  },
+  "artifacts": {
+    "checkpoint_sha256": "534b473019bd539acac0eaf965330bb3342cde9655b207aa6eb3f9afc31e7f45",
+    "tflite_sha256": "5838566357d5b071b7efe942aeca56da2c8ec6d976a62b7906ed747a8575f7ee",
+    "elf_sha256": "ee57c0469afe3f924695ee287a6e039d1c6b9bab1b53cdcbb090d1f19b37f18c",
+    "app_binary_sha256": "c53fb4acef9d4046aa972abb3ee82546293336318d1e13ee061d624f5e382bee"
+  },
+  "limitations": [
+    "The timed input is the quantized real-zero tensor, not a camera image.",
+    "The board product label mentions PSRAM, but this model neither enables nor uses PSRAM.",
+    "Accuracy is from a one-epoch demonstration checkpoint and is not a production accuracy claim.",
+    "The TFLite file was serialized from the frozen BakeNN quantized graph solely for an execution comparison; TFLite is not a BakeNN runtime dependency.",
+    "Latency and memory comparisons apply to this model, toolchain, board, and configuration only."
+  ]
+}

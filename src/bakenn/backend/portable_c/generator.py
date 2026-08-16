@@ -19,6 +19,7 @@ from bakenn.errors import CompileError
 from bakenn.ir import PerTensorQParams
 from bakenn.ir.types import TARGET_SIZE_MAX
 from bakenn.plan import ExecutionPlan
+from bakenn.reporting import MemoryReport, build_memory_report
 
 # Importing the central family aggregator installs built-in singledispatch
 # registrations.  Adding an op family does not require editing this generator.
@@ -38,6 +39,9 @@ class CompilationArtifacts:
     kernels_header: Path
     kernels_source: Path
     manifest: Path
+    memory_report: MemoryReport
+    memory_report_json: Path
+    memory_report_text: Path
     backend_plan: CBackendPlan
     build_fragment: Path
     support_sources: tuple[Path, ...] = ()
@@ -132,6 +136,8 @@ def generate_portable_c(
     kernels_header = output / kernels_header_name
     kernels_source = output / f"{symbol}_kernels.c"
     manifest = output / f"{symbol}_manifest.json"
+    memory_report_json = output / f"{symbol}_memory.json"
+    memory_report_text = output / f"{symbol}_memory.txt"
     build_fragment = output / "bakenn_sources.cmake"
 
     header.write_text(
@@ -251,6 +257,13 @@ void {symbol}_infer(
             f"{target.sram_bytes}; application globals and stack are not included"
         )
     constant_max_alignment = max((item.alignment for item in constants), default=1)
+    memory_report = build_memory_report(
+        plan,
+        backend_plan,
+        emitted_constant_payload_bytes=constant_bytes,
+    )
+    memory_report.write_json(memory_report_json)
+    memory_report.write_text(memory_report_text)
 
     weights_header.write_text(
         f"#ifndef {guard(symbol + '_weights')}\n#define {guard(symbol + '_weights')}\n\n"
@@ -356,6 +369,11 @@ void {symbol}_infer(
         "constant_bytes": constant_bytes,
         "constant_payload_bytes": constant_bytes,
         "constant_max_alignment": constant_max_alignment,
+        "memory_report": {
+            "schema_version": 1,
+            "json": memory_report_json.name,
+            "text": memory_report_text.name,
+        },
         "input": {
             "shape": list(input_type.shape),
             "dtype": input_type.dtype.value,
@@ -485,6 +503,9 @@ void {symbol}_infer(
         kernels_header=kernels_header,
         kernels_source=kernels_source,
         manifest=manifest,
+        memory_report=memory_report,
+        memory_report_json=memory_report_json,
+        memory_report_text=memory_report_text,
         backend_plan=backend_plan,
         build_fragment=build_fragment,
         support_sources=support_sources,
