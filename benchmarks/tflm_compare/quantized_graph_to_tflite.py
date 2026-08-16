@@ -24,6 +24,7 @@ from bakenn.ir import (
     DepthwiseConv2DOp,
     FlattenOp,
     LinearOp,
+    MaxPool2DOp,
     PerAxisQParams,
     PerTensorQParams,
     QuantizedGraph,
@@ -87,6 +88,24 @@ def _quantization(
     tflite.QuantizationParametersAddZeroPoint(builder, zero_vector)
     tflite.QuantizationParametersAddQuantizedDimension(builder, axis)
     return tflite.QuantizationParametersEnd(builder)
+
+
+def _collapse_repeated_per_axis(qparams: PerAxisQParams) -> PerTensorQParams:
+    """Represent a mathematically per-tensor scale as such in TFLite.
+
+    BakeNN keeps Linear constants in the uniform per-axis IR shape even when
+    PTQ selected per-tensor weights.  TFLite FullyConnected and the TVM 0.16
+    importer require that common scale to be encoded as a scalar, rather than
+    as N identical per-axis entries.
+    """
+
+    if not qparams.scales or not qparams.zero_points:
+        raise CompileError("cannot collapse empty per-axis qparams")
+    if any(scale != qparams.scales[0] for scale in qparams.scales[1:]):
+        raise CompileError("FullyConnected comparison requires per-tensor weight scale")
+    if any(zero_point != qparams.zero_points[0] for zero_point in qparams.zero_points[1:]):
+        raise CompileError("FullyConnected comparison requires one weight zero point")
+    return PerTensorQParams(qparams.scales[0], qparams.zero_points[0])
 
 
 def _tensor(
@@ -217,6 +236,7 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
         DepthwiseConv2DOp,
         AddOp,
         AveragePool2DOp,
+        MaxPool2DOp,
         FlattenOp,
         ReshapeOp,
         LinearOp,
@@ -323,6 +343,12 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
     depthwise_weights = {
         op.weight for op in graph.ops if isinstance(op, DepthwiseConv2DOp)
     }
+    linear_per_tensor_constants = {
+        name
+        for op in graph.ops
+        if isinstance(op, LinearOp)
+        for name in (op.weight, op.bias)
+    }
     for name, value in graph.constants.items():
         stored = value.reshape((1, *value.shape)) if name in depthwise_weights else value
         buffer_indices[name] = len(buffer_values)
@@ -339,9 +365,12 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
             value_type = graph.values[name]
             shape = value_type.shape
             axis_override = None
+            qparams = value_type.qparams
             if name in depthwise_weights:
                 shape = (1, *shape)
                 axis_override = 3
+            if name in linear_per_tensor_constants and isinstance(qparams, PerAxisQParams):
+                qparams = _collapse_repeated_per_axis(qparams)
             tensor_type = (
                 tflite.TensorType.INT8
                 if value_type.dtype is DType.INT8
@@ -354,7 +383,7 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
                     shape=shape,
                     tensor_type=tensor_type,
                     buffer_index=buffer_indices.get(name, 0),
-                    qparams=value_type.qparams,
+                    qparams=qparams,
                     axis_override=axis_override,
                 )
             )
@@ -376,6 +405,7 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
         ("DEPTHWISE_CONV_2D", tflite.BuiltinOperator.DEPTHWISE_CONV_2D, 3),
         ("ADD", tflite.BuiltinOperator.ADD, 2),
         ("AVERAGE_POOL_2D", tflite.BuiltinOperator.AVERAGE_POOL_2D, 2),
+        ("MAX_POOL_2D", tflite.BuiltinOperator.MAX_POOL_2D, 2),
         ("RESHAPE", tflite.BuiltinOperator.RESHAPE, 1),
         ("FULLY_CONNECTED", tflite.BuiltinOperator.FULLY_CONNECTED, 4),
         ("PADV2", tflite.BuiltinOperator.PADV2, 1),
@@ -474,7 +504,7 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
             kind = "ADD"
             inputs = tuple(tensor_indices[name] for name in op.inputs)
             options_type = tflite.BuiltinOptions.AddOptions
-        elif isinstance(op, AveragePool2DOp):
+        elif isinstance(op, (AveragePool2DOp, MaxPool2DOp)):
             padding = _padding(
                 graph.values[op.input].shape,
                 output_type.shape,
@@ -493,7 +523,11 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
             tflite.Pool2DOptionsAddFilterHeight(builder, op.kernel[0])
             tflite.Pool2DOptionsAddFusedActivationFunction(builder, activation)
             options = tflite.Pool2DOptionsEnd(builder)
-            kind = "AVERAGE_POOL_2D"
+            kind = (
+                "AVERAGE_POOL_2D"
+                if isinstance(op, AveragePool2DOp)
+                else "MAX_POOL_2D"
+            )
             inputs = (tensor_indices[op.input],)
             options_type = tflite.BuiltinOptions.Pool2DOptions
         elif isinstance(op, (FlattenOp, ReshapeOp)):

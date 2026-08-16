@@ -4,6 +4,13 @@ This document separates host correctness tests, boardless target builds and
 physical performance measurements.  A cross-build proves that an artifact
 compiles and links; it is not a latency claim.
 
+The two evidence classes have separate indexes:
+
+- [`benchmarks/physical/`](benchmarks/physical/README.md) contains only runs
+  with a physical-board UART transcript;
+- [`benchmarks/cross_build/`](benchmarks/cross_build/README.md) contains
+  boardless compiler/linker evidence with all runtime metrics unmeasured.
+
 ## Host environment and full test suite
 
 ```bash
@@ -57,6 +64,72 @@ python scripts/build_release_evidence.py \
 
 An absent physical artifact is reported as absent; the script never invents a
 measurement or substitutes a host result.
+
+## Trained MNIST evidence and replay
+
+The four-epoch checkpoint, exact calibration bytes, generated C and a
+class-balanced 100-image board corpus are committed under
+`examples/mnist/evidence/`. Verify the recorded payload hashes:
+
+```bash
+python - <<'PY'
+import hashlib, json, pathlib
+root = pathlib.Path("examples/mnist/evidence")
+manifest = json.loads((root / "mnist_evidence.json").read_text())
+for item in manifest["files"]:
+    actual = hashlib.sha256((root / item["path"]).read_bytes()).hexdigest()
+    assert actual == item["sha256"], (item["path"], actual)
+print("MNIST evidence payload hashes: PASS")
+PY
+```
+
+Replay PTQ and generated-C evaluation from the frozen checkpoint:
+
+```bash
+PYTHONPATH=src python examples/mnist/run_mnist.py \
+  --checkpoint examples/mnist/evidence/mnist_fp32.pt
+```
+
+The replay still downloads/loads the canonical MNIST files so that FP32 and C
+accuracy are recomputed over all 10,000 test images. Their extracted IDX
+SHA-256 values are recorded in `mnist_evidence.json`.
+
+Generate and cross-build the original-ESP32 full-model firmware:
+
+```bash
+PYTHONPATH=src python examples/mnist/generate_esp32_benchmark.py
+cd build/mnist_esp32_physical/esp_idf
+. "$IDF_PATH/export.sh"
+idf.py set-target esp32
+idf.py build
+idf.py size
+```
+
+This is still cross-build evidence. It becomes physical evidence only after
+`idf.py -p PORT flash monitor` produces a transcript containing 100 samples,
+99 correct classifications, 1,000 compared bytes, zero mismatches, output
+FNV-1a `0x55fb9e60`, cycles and the four expected provenance hashes.
+
+## microTVM AOT+USMP+CMSIS-NN baseline
+
+The trained MNIST graph is also compared with the official Apache TVM 0.16.0
+source release under a shared quantized contract. Build TVM with
+`USE_MICRO=ON`, `USE_CMSISNN=ON` and `USE_LLVM=OFF`, then run:
+
+```bash
+PYTHONPATH="$TVM_SOURCE/python:src:examples/mnist:benchmarks/tflm_compare" \
+TVM_LIBRARY_PATH="$TVM_BUILD" TOPHUB_LOCATION=NONE \
+python benchmarks/microtvm_compare/build_mnist.py \
+  --tvm-source "$TVM_SOURCE" \
+  --tvm-build "$TVM_BUILD"
+```
+
+The script validates the checkpoint/calibration hashes, emits the common
+`.tflite`, partitions five operators to CMSIS-NN, performs a 1,000-byte host C
+differential, and cross-links both freestanding Cortex-M4 ELFs. Exact source
+archive hash, commands, generated sources and result fields are documented in
+[`benchmarks/microtvm_compare/`](benchmarks/microtvm_compare/README.md).
+Cross-linked Flash/SRAM are not physical cycle evidence.
 
 ## Physical nRF52840 evidence
 

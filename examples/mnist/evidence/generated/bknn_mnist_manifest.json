@@ -1,0 +1,243 @@
+{
+  "activation_arena_bytes": 3920,
+  "arena_alignment": 16,
+  "arena_bytes": 3920,
+  "arithmetic_profile": "bakenn.int8.v1",
+  "backend": {
+    "cmsis_nn_enabled": false,
+    "esp_nn_enabled": false,
+    "kernel_policy": "portable",
+    "name": "c11",
+    "optimized_steps": 0,
+    "selections": [
+      {
+        "implementation": "portable.conv2d_s8.v1",
+        "optimized": false,
+        "packed_constants": [],
+        "rejected_implementations": {
+          "cmsis_nn.conv2d_s8.v4.0.0": "CMSIS-NN source bundling is disabled",
+          "cortex_m4.conv2d_1x1_smlad.v1": "target does not provide ARMv7E-M DSP instructions",
+          "cortex_m4.conv2d_3x3_im2col_smlad.v1": "target does not provide ARMv7E-M DSP instructions",
+          "esp_nn.esp32s3.conv2d_s8.v1.2.6": "ESP-NN source bundling is disabled",
+          "optimized.conv2d_1x1_o2.v1": "Conv2D weight must be an OI 1x1 int8 matrix"
+        },
+        "scratch_alignment": 1,
+        "scratch_bytes": 0,
+        "selection_reason": "generic NHWC/OHWI Conv2D kernel supports every verified Conv2DStep",
+        "step_index": 0,
+        "step_name": "conv2d"
+      },
+      {
+        "implementation": "portable.max_pool2d_s8.v1",
+        "optimized": false,
+        "packed_constants": [],
+        "rejected_implementations": {
+          "cmsis_nn.max_pool2d_s8.v4.0.0": "CMSIS-NN MaxPool requires source bundling, an ARMv7E-M DSP target, signed-32-bit dimensions, and symmetric padding",
+          "cortex_m4.max_pool2d_2x2_s2.v1": "requires Cortex-M4 DSP target and 2x2 stride-two zero-padding shape",
+          "esp_nn.esp32s3.max_pool2d_s8.v1.2.6": "ESP-NN source bundling is disabled"
+        },
+        "scratch_alignment": 1,
+        "scratch_bytes": 0,
+        "selection_reason": "portable MaxPool2D supports every verified step",
+        "step_index": 1,
+        "step_name": "max_pool2d"
+      },
+      {
+        "implementation": "portable.conv2d_s8.v1",
+        "optimized": false,
+        "packed_constants": [],
+        "rejected_implementations": {
+          "cmsis_nn.conv2d_s8.v4.0.0": "CMSIS-NN source bundling is disabled",
+          "cortex_m4.conv2d_1x1_smlad.v1": "target does not provide ARMv7E-M DSP instructions",
+          "cortex_m4.conv2d_3x3_im2col_smlad.v1": "target does not provide ARMv7E-M DSP instructions",
+          "esp_nn.esp32s3.conv2d_s8.v1.2.6": "ESP-NN source bundling is disabled",
+          "optimized.conv2d_1x1_o2.v1": "Conv2D weight must be an OI 1x1 int8 matrix"
+        },
+        "scratch_alignment": 1,
+        "scratch_bytes": 0,
+        "selection_reason": "generic NHWC/OHWI Conv2D kernel supports every verified Conv2DStep",
+        "step_index": 2,
+        "step_name": "conv2d_1"
+      },
+      {
+        "implementation": "portable.max_pool2d_s8.v1",
+        "optimized": false,
+        "packed_constants": [],
+        "rejected_implementations": {
+          "cmsis_nn.max_pool2d_s8.v4.0.0": "CMSIS-NN MaxPool requires source bundling, an ARMv7E-M DSP target, signed-32-bit dimensions, and symmetric padding",
+          "cortex_m4.max_pool2d_2x2_s2.v1": "requires Cortex-M4 DSP target and 2x2 stride-two zero-padding shape",
+          "esp_nn.esp32s3.max_pool2d_s8.v1.2.6": "ESP-NN source bundling is disabled"
+        },
+        "scratch_alignment": 1,
+        "scratch_bytes": 0,
+        "selection_reason": "portable MaxPool2D supports every verified step",
+        "step_index": 3,
+        "step_name": "max_pool2d_1"
+      },
+      {
+        "implementation": "portable.flatten_view.v1",
+        "optimized": false,
+        "packed_constants": [],
+        "rejected_implementations": {},
+        "scratch_alignment": 1,
+        "scratch_bytes": 0,
+        "selection_reason": "portable C baseline is defined for this lowered step",
+        "step_index": 4,
+        "step_name": "flatten"
+      },
+      {
+        "implementation": "portable.linear_s8.v1",
+        "optimized": false,
+        "packed_constants": [],
+        "rejected_implementations": {
+          "cmsis_nn.linear_s8.v4.0.0": "CMSIS-NN source bundling is disabled",
+          "cortex_m4.linear_smlad.v1": "target does not provide ARMv7E-M DSP instructions",
+          "esp_nn.esp32s3.linear_per_channel_s8.v1.2.6": "ESP-NN source bundling is disabled",
+          "optimized.linear_oi2.v1": "excluded by portable kernel policy",
+          "optimized.linear_oi2_tail.v1": "output feature count has no odd tail"
+        },
+        "scratch_alignment": 1,
+        "scratch_bytes": 0,
+        "selection_reason": "generic OI Linear kernel supports every verified LinearStep",
+        "step_index": 5,
+        "step_name": "linear"
+      }
+    ],
+    "target": {
+      "abi": "c11-ilp32",
+      "architecture": "portable",
+      "arena_alignment": 1,
+      "compiler_flags": [],
+      "constant_alignment": 1,
+      "cpu": "generic-32-bit",
+      "features": [
+        "scalar-int8"
+      ],
+      "flash_bytes": null,
+      "id": "portable32",
+      "measured_cost_table": {
+        "available": false,
+        "entries": [],
+        "entry_count": 0
+      },
+      "metadata": {},
+      "sram_bytes": null,
+      "toolchain": null
+    },
+    "weight_packing": true
+  },
+  "compiler_version": "0.1.0",
+  "constant_bytes": 4508,
+  "constant_max_alignment": 1,
+  "constant_payload_bytes": 4508,
+  "input": {
+    "dtype": "int8",
+    "layout": "NHWC",
+    "qparams": {
+      "kind": "per_tensor",
+      "scale": 0.003921568859368563,
+      "zero_point": -128
+    },
+    "shape": [
+      1,
+      28,
+      28,
+      1
+    ]
+  },
+  "memory_report": {
+    "json": "bknn_mnist_memory.json",
+    "schema_version": 1,
+    "text": "bknn_mnist_memory.txt"
+  },
+  "model": "bknn_mnist",
+  "operations": [
+    {
+      "accumulator_bound_max": 197464,
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "input": "value",
+      "kind": "conv2d_s8",
+      "name": "conv2d",
+      "output": "relu",
+      "padding": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "input": "relu",
+      "kind": "max_pool2d_s8",
+      "name": "max_pool2d",
+      "output": "max_pool2d"
+    },
+    {
+      "accumulator_bound_max": 526627,
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "input": "max_pool2d",
+      "kind": "conv2d_s8",
+      "name": "conv2d_1",
+      "output": "relu_1",
+      "padding": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "input": "relu_1",
+      "kind": "max_pool2d_s8",
+      "name": "max_pool2d_1",
+      "output": "max_pool2d_1"
+    },
+    {
+      "emits_kernel": false,
+      "input": "max_pool2d_1",
+      "kind": "flatten_view",
+      "name": "flatten",
+      "output": "flatten"
+    },
+    {
+      "accumulator_bound_max": 2562216,
+      "input": "flatten",
+      "kind": "linear_s8",
+      "name": "linear",
+      "output": "linear"
+    }
+  ],
+  "output": {
+    "dtype": "int8",
+    "layout": "NC",
+    "qparams": {
+      "kind": "per_tensor",
+      "scale": 0.16788659989833832,
+      "zero_point": 29
+    },
+    "shape": [
+      1,
+      10
+    ]
+  },
+  "schema_version": 3,
+  "scratch_alignment": 1,
+  "scratch_bytes": 0,
+  "scratch_offset": null
+}

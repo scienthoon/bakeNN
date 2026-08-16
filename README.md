@@ -77,11 +77,39 @@ constraints for firmware that rebuilds when its linked model changes, not an
 attempt to provide a dynamic model runtime.  See [STABILITY.md](STABILITY.md)
 for the compatibility policy.
 
+For a sourced comparison with TFLM and Edge Impulse EON—including where each
+system wins—see [docs/COMPARISON.md](docs/COMPARISON.md).
+
 ## Physical benchmark summary
 
 These are scoped physical measurements, not a claim that BakeNN wins for every
 model or MCU.  All compared output bytes were identical; the full protocols,
 hashes, raw UART and limitations are checked in under `benchmarks/`.
+
+Physical measurements and boardless cross-builds are indexed separately:
+
+- [physical-board evidence](benchmarks/physical/README.md);
+- [cross-build/toolchain evidence](benchmarks/cross_build/README.md).
+
+### Trained MNIST full-model demo
+
+The checked-in MNIST evidence freezes a four-epoch FP32 checkpoint, 160
+class-balanced calibration images, generated standalone C and a 100-image
+physical-board corpus. FP32 accuracy is 96.92%; generated-C INT8 accuracy is
+97.02% over all 10,000 test images, and Python INT8 versus generated C has zero
+byte mismatches. See [the evidence manifest](examples/mnist/evidence/mnist_evidence.json)
+and [reproduction instructions](examples/mnist/evidence/README.md).
+
+The original-ESP32 full-model project also cross-builds successfully. Its
+cycles remain unmeasured until a physical UART transcript is checked in; the
+[cross-build record](benchmarks/cross_build/results/mnist_esp32_cross_build.json)
+is deliberately excluded from the performance tables below.
+
+The trained model also has a same-graph Cortex-M4 comparison against Apache
+TVM 0.16.0 AOT+USMP+CMSIS-NN. Both generated C paths matched 1,000/1,000 output
+bytes; the BakeNN ELF linked 12,088 B of Flash versus microTVM's 17,456 B, with
+the same 4,064 B planned workspace. These are boardless section sizes, not
+latency. See the [microTVM evidence](benchmarks/microtvm_compare/README.md).
 
 ### Original ESP32: trained MobileNetV2-0.25
 

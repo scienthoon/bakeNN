@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "evidence_class": "boardless_cross_build",
+  "performance_claim_permitted": false,
+  "model": "trained MNISTNet full model",
+  "target": {
+    "board": "unmeasured",
+    "chip": "ESP32 Xtensa LX6 link target",
+    "idf_target": "esp32"
+  },
+  "source": {
+    "bakenn_version": "0.1.0",
+    "checkpoint_file_sha256": "a2f08c02a718d2e6cbe590ad442891db04308a3c82a2c791b8e0fc02186ea498",
+    "checkpoint_logical_sha256": "733130916e926da785afc63da0786d7613b0db808c3482398ae84b41ab706840",
+    "calibration_corpus_sha256": "06ce2a1aaaa0f75e566b9494c17b3c1fce4063272d1ce4e879c24b868bbb4e29",
+    "physical_input_corpus_sha256": "27c96cc7e1e5b49058b8183781af349c1773b89cbfa4791b6eb098397111f653",
+    "expected_output_sha256": "cdbbfc38bf5f17a2867b17a8a28e643043e50733063e246b0bc85cbeaae30ba4"
+  },
+  "toolchain": {
+    "esp_idf_version": "v5.1.2",
+    "esp_idf_commit": "482a8fb2d78e3b58eb21b26da8a5bedf90623213",
+    "compiler": "xtensa-esp32-elf-gcc 12.2.0 (crosstool-NG esp-12.2.0_20230208)",
+    "optimization": "CONFIG_COMPILER_OPTIMIZATION_SIZE=y"
+  },
+  "artifacts": {
+    "elf_sha256": "da26a8f4f76eb0a158ccd1408fea79d1545b02f6e2fd8b320638116c18fb98dd",
+    "map_sha256": "da153fad115133020917adb5102c1ba224da14b44e019bae1ef911ddd39e42ff",
+    "bin_sha256": "05a87fd88aad6298c937380233594b93f057e0798c20922448bb120fedaf531a",
+    "binary_bytes": 250848,
+    "contract_sha256": "45d36e5549f1a46e5b830daeea786a2a1d10b80d370ad4474c5f8a3a1baad6d9"
+  },
+  "link_report": {
+    "used_static_dram_bytes": 15336,
+    "dram_data_bytes": 8064,
+    "dram_bss_bytes": 7272,
+    "used_static_iram_bytes": 43646,
+    "flash_text_bytes": 79427,
+    "flash_rodata_bytes": 119340,
+    "flash_other_bytes": 256,
+    "used_flash_non_ram_bytes": 199023,
+    "total_image_bytes": 250733,
+    "model_component_flash_bytes": 8881,
+    "model_component_dram_bytes": 0,
+    "embedded_test_corpus_bytes": 79500,
+    "model_arena_bytes": 3920,
+    "model_constant_bytes": 4508
+  },
+  "runtime": {
+    "physical_output": {
+      "status": "unmeasured",
+      "reason": "No physical UART transcript is attached to this cross-build record."
+    },
+    "cycles": {
+      "status": "unmeasured",
+      "reason": "Cross-compilation cannot measure MCU cycles."
+    },
+    "stack_high_water": {
+      "status": "unmeasured",
+      "reason": "Requires execution on a physical board."
+    }
+  },
+  "notes": [
+    "The app embeds 100 INT8 images, labels and expected outputs solely for physical correctness checking.",
+    "The embedded 79,500-byte corpus is not part of the model and must be excluded from model-only Flash comparisons.",
+    "This record proves ESP-IDF compilation and linking only; it is not a latency result."
+  ]
+}

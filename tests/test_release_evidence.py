@@ -31,6 +31,20 @@ def test_release_evidence_is_deterministic_and_manifested(tmp_path: Path) -> Non
             item["path"].endswith("iotlab_447626_direct_cmsis_fc_uart.txt")
             for item in manifest["files"]
         )
+        assert any(
+            item["path"] == "examples/mnist/evidence/mnist_fp32.pt"
+            for item in manifest["files"]
+        )
+        assert any(
+            item["path"]
+            == "benchmarks/cross_build/results/mnist_esp32_cross_build.json"
+            for item in manifest["files"]
+        )
+        assert any(
+            item["path"]
+            == "benchmarks/microtvm_compare/results/mnist_cortex_m4_cross_build.json"
+            for item in manifest["files"]
+        )
 
 
 def test_release_evidence_rejects_unsafe_artifact_label(tmp_path: Path) -> None:

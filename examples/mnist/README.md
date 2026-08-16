@@ -13,8 +13,23 @@ PYTHONPATH=src python examples/mnist/run_mnist.py
 
 The dataset is cached under `/private/tmp/bakenn-mnist-data` by default. Build
 artifacts, the trained state dict, and `mnist_report.json` are written under
-`examples/mnist/build`. Use `--help` to change epochs, calibration size,
-compiler, or output directories.
+`examples/mnist/build`. A submission-grade copy of the checkpoint,
+calibration corpus, physical-board corpus, generated sources and their hashes
+is written under [`evidence/`](evidence/README.md). Use `--help` to change
+epochs, calibration size, compiler, or output directories.
+
+Replay the frozen checkpoint without training or dataset-selection drift:
+
+```bash
+PYTHONPATH=src python examples/mnist/run_mnist.py \
+  --checkpoint examples/mnist/evidence/mnist_fp32.pt
+```
+
+Generate the trained original-ESP32 full-model benchmark project:
+
+```bash
+PYTHONPATH=src python examples/mnist/generate_esp32_benchmark.py
+```
 
 Host execution time is informational and is not an MCU performance benchmark.
 The meaningful accuracy fields are FP32 test accuracy, generated-C test

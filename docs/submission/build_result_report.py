@@ -16,7 +16,7 @@ from docx.shared import Inches, Pt, RGBColor
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "docs/submission/BakeNN_오픈소스개발자대회_결과보고서_초안.docx"
-FONT = "Arial Unicode MS"  # named Korean-font override for standard_business_brief
+FONT = "AppleGothic"  # installed TTF with Korean glyphs for LibreOffice/PDF rendering
 MONO = "Menlo"
 BLUE = "2E74B5"
 DARK_BLUE = "1F4D78"
@@ -364,7 +364,7 @@ def build() -> Path:
             ("저장소", "https://github.com/scienthoon/bakeNN"),
             ("라이선스", "Apache License 2.0"),
             ("버전", "BakeNN 0.1.0 (출품 준비 브랜치)"),
-            ("작성 기준일", "2026년 8월 16일"),
+            ("작성 기준일", "2026년 8월 17일"),
             ("작성자", "scienthoon (GitHub)"),
         ),
         (2700, 6660),
@@ -498,7 +498,7 @@ def build() -> Path:
     _add_callout(
         document,
         "전체 회귀",
-        "2026-08-16 동결 브랜치에서 279 tests + 6 subtests가 통과했다. "
+        "2026-08-17 제출 준비 브랜치에서 287 tests + 6 subtests가 통과했다. "
         "GitHub Actions는 Python 3.10/3.12 × GCC/Clang, PyTorch frontend/wheel, ARM/RISC-V cross-toolchain, ESP-IDF 3종을 검증한다.",
     )
     for item in (
@@ -511,9 +511,26 @@ def build() -> Path:
         _add_list_item(document, item, bullets)
 
     _add_heading(document, "8. 실제 학습 모델 PTQ 결과")
+    _add_callout(
+        document,
+        "trained MNIST full model",
+        "고정 seed로 60,000장을 4 epoch 학습한 CNN은 FP32 96.92%, 생성 C INT8 97.02%를 기록했다. "
+        "전체 10,000장 추론과 1,280 output-byte Python↔C 비교를 수행했으며 mismatch는 0이었다.",
+    )
+    _add_table(
+        document,
+        ("증거", "값"),
+        (
+            ("FP32 checkpoint logical SHA-256", "733130916e926da785afc63da0786d7613b0db808c3482398ae84b41ab706840"),
+            ("Calibration corpus SHA-256", "06ce2a1aaaa0f75e566b9494c17b3c1fce4063272d1ce4e879c24b868bbb4e29"),
+            ("Generated artifact-set SHA-256", "cc59172a18cc8d752185ab76c4a5a50c1bdccbcbf9abf8d8457a013e63d28f12"),
+            ("Physical corpus", "100장 class-balanced, Python INT8 99/100 correct, expected output hash 고정"),
+        ),
+        (3300, 6060),
+    )
     _add_paragraph(
         document,
-        "MNIST 2종과 CIFAR-10 4종을 각각 전체 training split으로 1 epoch 학습하고, "
+        "추가 model-family smoke로 MNIST 2종과 CIFAR-10 4종을 각각 전체 training split으로 1 epoch 학습하고, "
         "100개 class-balanced 이미지로 calibration한 뒤 10,000개 test 이미지를 생성 C로 실행했다.",
     )
     _add_table(
@@ -537,7 +554,13 @@ def build() -> Path:
         "본 실험은 SOTA 정확도가 아니라 실제 학습→calibration→PTQ→C 파이프라인과 양자화 차이를 검증한다.",
     )
 
-    _add_heading(document, "9. TFLite Micro 대비 실보드 결과")
+    _add_heading(document, "9. 물리보드 성능 결과")
+    _add_callout(
+        document,
+        "증거 경계",
+        "이 절에는 실제 MCU에서 UART로 수집한 cycles·Flash·SRAM만 둔다. host 실행과 cross-build 결과는 다음 절에 분리하며 성능 수치로 사용하지 않는다.",
+    )
+    _add_heading(document, "9.1 nRF52840: TFLM/CMSIS-NN 비교", level=2)
     _add_paragraph(
         document,
         "동일한 32→16→4 INT8 FC workload를 IoT-LAB nRF52840DK 64 MHz에서 "
@@ -568,7 +591,58 @@ def build() -> Path:
         "이는 CMSIS-NN Conv 비교가 아니며 모든 모델·MCU로 일반화하지 않는다.",
     )
 
-    _add_heading(document, "10. TFLM 대비 실용적 차별점")
+    _add_heading(document, "9.2 ESP32: trained MobileNetV2-0.25", level=2)
+    _add_paragraph(
+        document,
+        "동일한 1-epoch CIFAR-10 checkpoint·calibration·INT8 graph·입력에서 ESP32-D0WDQ6 240 MHz, "
+        "8 warmups, 101회 측정으로 BakeNN portable, BakeNN+ESP-NN, TFLM+ESP-NN을 비교했다. 세 경로의 출력은 일치했다.",
+    )
+    _add_table(
+        document,
+        ("Path", "Median", "App binary", "Linked DRAM"),
+        (
+            ("BakeNN portable C", "285.546 ms", "459,088 B", "31,900 B"),
+            ("BakeNN + ESP-NN", "97.685 ms", "465,296 B", "31,900 B"),
+            ("TFLM + ESP-NN", "98.891 ms", "665,504 B", "95,332 B"),
+        ),
+        (3600, 1900, 1900, 1960),
+        numeric_columns=(1, 2, 3),
+    )
+    _add_paragraph(
+        document,
+        "이 artifact에서 BakeNN+ESP-NN은 TFLM+ESP-NN보다 latency가 1.22% 낮았고 app binary는 30.1%, "
+        "linked DRAM은 66.5% 작았다. optimized kernel이 지배하는 CNN에서는 BakeNN의 큰 차이가 주로 메모리와 통합 단순성에서 나타났다.",
+    )
+
+    _add_heading(document, "10. 보드리스 cross-build 및 microTVM 비교")
+    _add_callout(
+        document,
+        "성능 주장 금지",
+        "cross-build는 타겟 ABI·컴파일러·링커·section size·undefined symbol을 검증한다. 실제 MCU cycles, cache, energy, stack high-water를 증명하지 않는다.",
+    )
+    _add_paragraph(
+        document,
+        "동일 trained MNIST checkpoint와 160장 calibration에서 만든 하나의 quantized contract를 "
+        "BakeNN direct CMSIS-NN과 Apache TVM 0.16.0 AOT+USMP+CMSIS-NN으로 Cortex-M4에 cross-link했다. "
+        "두 생성 C는 각각 integer reference와 1,000/1,000 output bytes가 일치했다.",
+    )
+    _add_table(
+        document,
+        ("Path", "Linked Flash", "Static SRAM", "Workspace", "Physical cycles"),
+        (
+            ("BakeNN direct CMSIS-NN", "12,088 B", "4,864 B", "4,064 B", "미측정"),
+            ("microTVM AOT+USMP+CMSIS-NN", "17,456 B", "4,862 B", "4,064 B", "미측정"),
+        ),
+        (3100, 1600, 1600, 1500, 1560),
+        numeric_columns=(1, 2, 3),
+    )
+    _add_paragraph(
+        document,
+        "이 ELF에서 BakeNN의 linked Flash는 microTVM보다 30.8% 작고 static SRAM은 사실상 같았다. "
+        "trained MNIST ESP32 project도 cross-build와 corpus/hash 고정까지 완료했지만 UART transcript가 추가되기 전에는 물리 성능표에 넣지 않는다.",
+    )
+
+    _add_heading(document, "11. TFLM 대비 실용적 차별점")
     differentiator_numbers = _numbering(document, bullet=False)
     for item in (
         "외부 model interpreter를 MCU에 이식하지 않고 생성 C와 선택된 kernel만 MCU compiler로 빌드한다.",
@@ -584,7 +658,7 @@ def build() -> Path:
         "동적 shape·다중 공개 입출력·런타임 모델 교체를 지원하지 않는다. 이러한 요구가 중요한 제품에는 TFLM이 더 적합하다.",
     )
 
-    _add_heading(document, "11. 오픈소스 구성과 재현 방법")
+    _add_heading(document, "12. 오픈소스 구성과 재현 방법")
     _add_table(
         document,
         ("항목", "내용"),
@@ -593,8 +667,9 @@ def build() -> Path:
             ("License", "Apache-2.0; 상업 이용·수정·재배포 허용"),
             ("CI", "GCC/Clang, PyTorch, wheel, ARM/RISC-V, ESP-IDF"),
             ("Community", "CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, issue/PR templates"),
-            ("Evidence", "benchmarks/RESULTS.md 및 원본 UART/JSON report"),
-            ("Demo", "examples/esp32s3_end_to_end/"),
+            ("Evidence", "물리 benchmarks/physical과 보드리스 benchmarks/cross_build를 분리"),
+            ("Clean room", "scripts/verify_mnist_evidence.py; 외부 contributor PR gate"),
+            ("Demo", "examples/mnist 및 examples/esp32s3_end_to_end"),
         ),
         (2300, 7060),
     )
@@ -615,12 +690,13 @@ def build() -> Path:
         font=MONO,
     )
 
-    _add_heading(document, "12. 한계와 향후 계획")
+    _add_heading(document, "13. 한계와 향후 계획")
     _add_table(
         document,
         ("현재 한계", "후속 작업"),
         (
-            ("ESP32/S3 물리 cycle·energy 미측정", "동일 모델 TFLM/ESP-NN 실보드 비교와 measured AUTO cost table"),
+            ("ESP32-S3 물리 cycle·energy 미측정", "동일 모델 TFLM/ESP-NN 실보드 비교와 measured AUTO cost table"),
+            ("trained MNIST 물리 UART 미수집", "준비된 100장 corpus로 ESP32 flash·cycles·stack transcript 고정"),
             ("TFLM보다 좁은 operator surface", "시장별 fixture 기반으로 detection/postprocess 등 선택 확장"),
             ("PTQ만 구현, QAT fine-tuning 없음", "PTQ 정확도가 부족한 모델을 위한 별도 QAT frontend"),
             ("동적 shape·다중 공개 I/O 없음", "핵심 제품 계약은 유지하고 필요한 정적 multi-ABI를 별도 검토"),
@@ -629,7 +705,7 @@ def build() -> Path:
         (3800, 5560),
     )
 
-    _add_heading(document, "13. 제출 항목 상태")
+    _add_heading(document, "14. 제출 항목 상태")
     _add_table(
         document,
         ("필수 항목", "상태", "비고"),
@@ -639,6 +715,8 @@ def build() -> Path:
             ("결과보고서 PDF", "준비", "본 문서 렌더 PDF"),
             ("시연 절차", "준비", "3분 demo script와 ESP32-S3 one-command generator"),
             ("시연영상 링크", "미완료", "화면 녹화·업로드 후 공식 양식과 본 문서에 링크 추가 필요"),
+            ("외부 clean-room PR", "미완료", "제3자가 fresh clone에서 1-command verifier 실행 후 JSON PR"),
+            ("trained MNIST physical", "미완료", "ESP32 UART transcript와 cycles/stack 결과 체크인"),
             ("최종 release/tag", "미완료", "green PR merge 후 main에서 v0.1.0 tag/release"),
         ),
         (2600, 1500, 5260),
@@ -657,6 +735,11 @@ def build() -> Path:
         "benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc.md",
         "benchmarks/tflm_compare/results/iotlab_447626_direct_cmsis_fc_uart.txt",
         "benchmarks/tflm_compare/results/iotlab_447609_conv.json",
+        "benchmarks/esp32/results/mobilenet_v2_025_cifar10_esp32_tflm_espnn.md",
+        "benchmarks/microtvm_compare/results/mnist_cortex_m4_cross_build.json",
+        "examples/mnist/evidence/mnist_evidence.json",
+        "docs/COMPARISON.md",
+        "docs/CLEAN_ROOM_REPRODUCTION.md",
         "examples/training_matrix/RESULTS.md",
         "benchmarks/RESULTS.md",
         "docs/P0_STATUS.md",
