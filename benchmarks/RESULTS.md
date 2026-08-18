@@ -64,6 +64,21 @@ energy claims. The generated ESP-IDF runner already prints first/median/p95
 cycles, output checksum and FreeRTOS stack watermark, so no compiler change is
 needed for that measurement.
 
+## Cortex-M4 full-model microTVM cross-build
+
+The trained MNISTNet was lowered from one shared quantized contract through
+BakeNN direct CMSIS-NN and Apache TVM 0.16.0 AOT+USMP+CMSIS-NN. The microTVM C
+output matched the BakeNN integer reference in all 1,000 compared bytes.
+
+| Path | Linked Flash | Linked static SRAM | Planned workspace | Physical cycles |
+|---|---:|---:|---:|---|
+| BakeNN direct CMSIS-NN | **12,088 B** | 4,864 B | 4,064 B | unmeasured |
+| microTVM AOT+USMP+CMSIS-NN | 17,456 B | **4,862 B** | 4,064 B | unmeasured |
+
+BakeNN used 30.8% less linked Flash for this exact freestanding ELF. This is a
+boardless compiler/linker result and is intentionally excluded from physical
+speed rankings. See the [full protocol](microtvm_compare/README.md).
+
 ## Claim boundary
 
 These results demonstrate that AOT execution can remove measurable runtime

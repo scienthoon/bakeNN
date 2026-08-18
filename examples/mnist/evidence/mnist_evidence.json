@@ -1,0 +1,182 @@
+{
+  "calibration": {
+    "corpus_sha256": "06ce2a1aaaa0f75e566b9494c17b3c1fce4063272d1ce4e879c24b868bbb4e29",
+    "samples": 160,
+    "samples_per_class": 16,
+    "selection": "first N samples per class in canonical MNIST training order",
+    "shape_nhw": [
+      160,
+      28,
+      28
+    ]
+  },
+  "checkpoint": {
+    "file_sha256": "a2f08c02a718d2e6cbe590ad442891db04308a3c82a2c791b8e0fc02186ea498",
+    "logical_tensor_sha256": "733130916e926da785afc63da0786d7613b0db808c3482398ae84b41ab706840"
+  },
+  "dataset_sources": [
+    {
+      "bytes": 7840016,
+      "name": "t10k-images-idx3-ubyte",
+      "sha256": "0fa7898d509279e482958e8ce81c8e77db3f2f8254e26661ceb7762c4d494ce7"
+    },
+    {
+      "bytes": 10008,
+      "name": "t10k-labels-idx1-ubyte",
+      "sha256": "ff7bcfd416de33731a308c3f266cc351222c34898ecbeaf847f06e48f7ec33f2"
+    },
+    {
+      "bytes": 47040016,
+      "name": "train-images-idx3-ubyte",
+      "sha256": "ba891046e6505d7aadcbbe25680a0738ad16aec93bde7f9b65e87a2fc25776db"
+    },
+    {
+      "bytes": 60008,
+      "name": "train-labels-idx1-ubyte",
+      "sha256": "65a50cbbf4e906d70832878ad85ccda5333a97f0f4c3dd2ef09a8a9eef7101c5"
+    }
+  ],
+  "files": [
+    {
+      "bytes": 125440,
+      "path": "calibration_images_u8.bin",
+      "role": "calibration_images_u8",
+      "sha256": "062ae5152913e6f7f0851d722a96e9fb84362a1fbf2ff128c41f8bad61477d7a"
+    },
+    {
+      "bytes": 160,
+      "path": "calibration_labels_u8.bin",
+      "role": "calibration_labels_u8",
+      "sha256": "ff80dcd9f67e9c83b3bb273abeefbc592c7cddfce987d279729bd4729000a5f6"
+    },
+    {
+      "bytes": 1758,
+      "path": "generated/bknn_mnist.c",
+      "role": "generated deployment artifact",
+      "sha256": "984d362a88019f728522aeda349ff93547282a0682ce204d7fbfa7570b7bca2d"
+    },
+    {
+      "bytes": 1176,
+      "path": "generated/bknn_mnist.h",
+      "role": "generated deployment artifact",
+      "sha256": "a190b19d3bd856e15837284218a2d785afb8b56d1dd44a1daa38af7a47214891"
+    },
+    {
+      "bytes": 8355,
+      "path": "generated/bknn_mnist_kernels.c",
+      "role": "generated deployment artifact",
+      "sha256": "c4c4889b0b295c7d050e12e2aaba52af78dcdffa6ce2a8d9b4db2eae085b355b"
+    },
+    {
+      "bytes": 1753,
+      "path": "generated/bknn_mnist_kernels.h",
+      "role": "generated deployment artifact",
+      "sha256": "d09c82fc655221460df8fbb1cd9668e911570c3e49ac8d8e1a0b546a984c0d4c"
+    },
+    {
+      "bytes": 7249,
+      "path": "generated/bknn_mnist_manifest.json",
+      "role": "generated deployment artifact",
+      "sha256": "6b3b4dae9980386e5b0e3e046e0b53afdcebbfb7ecd04ef13748d9aa7a69a010"
+    },
+    {
+      "bytes": 4797,
+      "path": "generated/bknn_mnist_memory.json",
+      "role": "generated deployment artifact",
+      "sha256": "aecb9a0bcd14a571274572207a74a3c013c26e85400cd87a1b50b4f2f17237cb"
+    },
+    {
+      "bytes": 1526,
+      "path": "generated/bknn_mnist_memory.txt",
+      "role": "generated deployment artifact",
+      "sha256": "e0c7a888c6e45ec4d16af9ed06c1db89ea1791d67e713bcd3132897c1c474e8d"
+    },
+    {
+      "bytes": 20506,
+      "path": "generated/bknn_mnist_weights.c",
+      "role": "generated deployment artifact",
+      "sha256": "0665100532d1933e17d7cfb814566b3e875f0a83a5d2badfb86e70b6bf59e35f"
+    },
+    {
+      "bytes": 667,
+      "path": "generated/bknn_mnist_weights.h",
+      "role": "generated deployment artifact",
+      "sha256": "1a6f06d3caa2af159f97acf3018b8f9ded5ac626820891cf7ae0a999463c5302"
+    },
+    {
+      "bytes": 20089,
+      "path": "mnist_fp32.pt",
+      "role": "serialized FP32 state_dict checkpoint",
+      "sha256": "a2f08c02a718d2e6cbe590ad442891db04308a3c82a2c791b8e0fc02186ea498"
+    },
+    {
+      "bytes": 1534,
+      "path": "mnist_report.json",
+      "role": "host training, PTQ and accuracy report",
+      "sha256": "681282c42ceea05945b5a51d63e8d14d1f75624c1df44cce0b9caf08414e2d4f"
+    },
+    {
+      "bytes": 1000,
+      "path": "physical_expected_outputs_int8.bin",
+      "role": "physical_expected_outputs_int8",
+      "sha256": "cdbbfc38bf5f17a2867b17a8a28e643043e50733063e246b0bc85cbeaae30ba4"
+    },
+    {
+      "bytes": 78400,
+      "path": "physical_test_images_u8.bin",
+      "role": "physical_test_images_u8",
+      "sha256": "7afcac3fef45dff212f193baaad8ea8b9c77d8c699a9a777aa6db50ff510725c"
+    },
+    {
+      "bytes": 78400,
+      "path": "physical_test_inputs_int8.bin",
+      "role": "physical_test_inputs_int8",
+      "sha256": "27c96cc7e1e5b49058b8183781af349c1773b89cbfa4791b6eb098397111f653"
+    },
+    {
+      "bytes": 100,
+      "path": "physical_test_labels_u8.bin",
+      "role": "physical_test_labels_u8",
+      "sha256": "b51f622729467a10be28516c6d6a8fc3ec9f6ab8be247e2b9866312af8998595"
+    }
+  ],
+  "generated_artifacts": {
+    "arena_bytes": 3920,
+    "constant_bytes": 4508,
+    "generated_c_test_accuracy": 0.9702,
+    "python_c_mismatched_bytes": 0,
+    "set_sha256": "cc59172a18cc8d752185ab76c4a5a50c1bdccbcbf9abf8d8457a013e63d28f12"
+  },
+  "physical_test_corpus": {
+    "expected_output_sha256": "cdbbfc38bf5f17a2867b17a8a28e643043e50733063e246b0bc85cbeaae30ba4",
+    "input_shape_nhwc": [
+      100,
+      28,
+      28,
+      1
+    ],
+    "python_int8_accuracy": 0.99,
+    "quantized_input_sha256": "27c96cc7e1e5b49058b8183781af349c1773b89cbfa4791b6eb098397111f653",
+    "raw_corpus_sha256": "eebd85b86c22132331f46441fade1ca578e02b73c4c7834a55158b03d55cd8a8",
+    "samples": 100,
+    "samples_per_class": 10,
+    "selection": "first N samples per class in canonical MNIST test order"
+  },
+  "schema_version": 1,
+  "scope": "trained FP32 MNIST checkpoint -> PTQ -> standalone C11",
+  "software": {
+    "bakenn": "0.1.0",
+    "compiler": "cc",
+    "torch": "2.10.0",
+    "torchvision": "0.25.0"
+  },
+  "source_commit": "5f1245eab8ef7a7d1ec9d5d2835ebad1ae2973f6",
+  "training": {
+    "epochs": 4,
+    "fp32_test_accuracy": 0.9692,
+    "performed": true,
+    "seed": 20260814,
+    "training_samples": 60000
+  },
+  "working_tree_dirty": false
+}

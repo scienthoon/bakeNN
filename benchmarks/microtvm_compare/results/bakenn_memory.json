@@ -1,0 +1,206 @@
+{
+  "arena_buffers": [
+    {
+      "lifetime": {
+        "birth_step": 0,
+        "death_step_exclusive": 2,
+        "last_live_step": 1
+      },
+      "members": [
+        "relu"
+      ],
+      "name": "relu",
+      "offset": 0,
+      "size_bytes": 3136
+    },
+    {
+      "lifetime": {
+        "birth_step": 2,
+        "death_step_exclusive": 4,
+        "last_live_step": 3
+      },
+      "members": [
+        "relu_1"
+      ],
+      "name": "relu_1",
+      "offset": 0,
+      "size_bytes": 1568
+    },
+    {
+      "lifetime": {
+        "birth_step": 3,
+        "death_step_exclusive": 6,
+        "last_live_step": 5
+      },
+      "members": [
+        "max_pool2d_1",
+        "flatten"
+      ],
+      "name": "max_pool2d_1",
+      "offset": 1568,
+      "size_bytes": 392
+    },
+    {
+      "lifetime": {
+        "birth_step": 1,
+        "death_step_exclusive": 3,
+        "last_live_step": 2
+      },
+      "members": [
+        "max_pool2d"
+      ],
+      "name": "max_pool2d",
+      "offset": 3136,
+      "size_bytes": 784
+    }
+  ],
+  "compile_time": {
+    "activation_arena_bytes": 3920,
+    "arena_alignment": 16,
+    "arena_bytes": 4064,
+    "caller_io_bytes": 794,
+    "emitted_constant_payload_bytes": 4428,
+    "generated_model_heap_calls": 0,
+    "input_bytes": 784,
+    "output_bytes": 10,
+    "scratch_bytes": 144,
+    "scratch_offset": 3920,
+    "semantic_constant_bytes": 4332
+  },
+  "compiler_version": "0.1.0",
+  "model": "mnist_common",
+  "not_measured_at_aot": {
+    "final_flash_load_bytes": {
+      "reason": "requires a final target ELF/map built with the production compiler, flags, and linker script",
+      "value": null
+    },
+    "full_firmware_peak_sram_bytes": {
+      "reason": "requires the final firmware and includes caller I/O, application globals, RTOS/interrupt state, and stacks",
+      "value": null
+    },
+    "peak_stack_bytes": {
+      "reason": "requires target stack analysis or a physical-board high-water measurement",
+      "value": null
+    }
+  },
+  "peak_live_working_payload": {
+    "bytes": 3920,
+    "definition": "live activation payload plus scratch used by the selected step",
+    "step_indices": [
+      1
+    ],
+    "step_names": [
+      "max_pool2d"
+    ]
+  },
+  "reuse_regions": [
+    {
+      "buffers": [
+        "relu",
+        "relu_1"
+      ],
+      "offset": 0,
+      "size_bytes": 1568
+    },
+    {
+      "buffers": [
+        "relu",
+        "max_pool2d_1"
+      ],
+      "offset": 1568,
+      "size_bytes": 392
+    }
+  ],
+  "schema_version": 1,
+  "scope": {
+    "arena_excludes_caller_io": true,
+    "constant_payload_is_not_final_flash": true,
+    "generated_model_only": true
+  },
+  "steps": [
+    {
+      "index": 0,
+      "kernel_id": "cmsis_nn.conv2d_s8.v4.0.0",
+      "live_activation_payload_bytes": 3136,
+      "live_buffers": [
+        "relu"
+      ],
+      "name": "conv2d",
+      "optimized": true,
+      "scratch_bytes": 36,
+      "working_payload_bytes": 3172
+    },
+    {
+      "index": 1,
+      "kernel_id": "cmsis_nn.max_pool2d_s8.v4.0.0",
+      "live_activation_payload_bytes": 3920,
+      "live_buffers": [
+        "relu",
+        "max_pool2d"
+      ],
+      "name": "max_pool2d",
+      "optimized": true,
+      "scratch_bytes": 0,
+      "working_payload_bytes": 3920
+    },
+    {
+      "index": 2,
+      "kernel_id": "cmsis_nn.conv2d_s8.v4.0.0",
+      "live_activation_payload_bytes": 2352,
+      "live_buffers": [
+        "relu_1",
+        "max_pool2d"
+      ],
+      "name": "conv2d_1",
+      "optimized": true,
+      "scratch_bytes": 144,
+      "working_payload_bytes": 2496
+    },
+    {
+      "index": 3,
+      "kernel_id": "cmsis_nn.max_pool2d_s8.v4.0.0",
+      "live_activation_payload_bytes": 1960,
+      "live_buffers": [
+        "relu_1",
+        "max_pool2d_1"
+      ],
+      "name": "max_pool2d_1",
+      "optimized": true,
+      "scratch_bytes": 0,
+      "working_payload_bytes": 1960
+    },
+    {
+      "index": 4,
+      "kernel_id": "portable.flatten_view.v1",
+      "live_activation_payload_bytes": 392,
+      "live_buffers": [
+        "max_pool2d_1"
+      ],
+      "name": "flatten",
+      "optimized": false,
+      "scratch_bytes": 0,
+      "working_payload_bytes": 392
+    },
+    {
+      "index": 5,
+      "kernel_id": "cmsis_nn.linear_s8.v4.0.0",
+      "live_activation_payload_bytes": 392,
+      "live_buffers": [
+        "max_pool2d_1"
+      ],
+      "name": "linear",
+      "optimized": true,
+      "scratch_bytes": 0,
+      "working_payload_bytes": 392
+    }
+  ],
+  "target": "cortex-m4",
+  "target_budgets": {
+    "arena_headroom_bytes": null,
+    "arena_headroom_scope": "caller I/O, application globals, and stacks excluded",
+    "constant_payload_headroom_bytes": null,
+    "constant_payload_headroom_scope": "generated code and initialized data excluded",
+    "flash_bytes": null,
+    "sram_bytes": null
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "modules": {
+    "mnist": {
+      "executors": [
+        "aot"
+      ],
+      "export_datetime": "2026-08-17 07:25:30Z",
+      "external_dependencies": [
+        {
+          "short_name": "tvm_standalone_crt",
+          "url": "./runtime",
+          "url_type": "mlf_path",
+          "version_spec": "0.16.0"
+        }
+      ],
+      "memory": {
+        "functions": {
+          "main": [
+            {
+              "constants_size_bytes": 4544,
+              "device": 1,
+              "inputs": {
+                "value": {
+                  "dtype": "int8",
+                  "size": 784
+                }
+              },
+              "io_size_bytes": 11590,
+              "outputs": {
+                "linear": {
+                  "dtype": "int8",
+                  "size": 10
+                }
+              },
+              "workspace_size_bytes": 4064
+            }
+          ],
+          "operator_functions": [
+            {
+              "function_name": "tvmgen_default_cmsis_nn_main_2",
+              "workspace": [
+                {
+                  "device": 1,
+                  "workspace_size_bytes": 0
+                }
+              ]
+            },
+            {
+              "function_name": "tvmgen_default_cmsis_nn_main_0",
+              "workspace": [
+                {
+                  "device": 1,
+                  "workspace_size_bytes": 0
+                }
+              ]
+            },
+            {
+              "function_name": "tvmgen_default_cmsis_nn_main_3",
+              "workspace": [
+                {
+                  "device": 1,
+                  "workspace_size_bytes": 0
+                }
+              ]
+            },
+            {
+              "function_name": "tvmgen_default_cmsis_nn_main_1",
+              "workspace": [
+                {
+                  "device": 1,
+                  "workspace_size_bytes": 0
+                }
+              ]
+            },
+            {
+              "function_name": "tvmgen_default_cmsis_nn_main_4",
+              "workspace": [
+                {
+                  "device": 1,
+                  "workspace_size_bytes": 0
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "model_name": "mnist",
+      "style": "full-model",
+      "target": [
+        "c -keys=arm_cpu,cpu -mcpu=cortex-m4"
+      ]
+    }
+  },
+  "version": 7
+}

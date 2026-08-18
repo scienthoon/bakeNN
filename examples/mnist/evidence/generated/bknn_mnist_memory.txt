@@ -1,0 +1,36 @@
+BakeNN Memory Report
+Model: mnist
+Target: portable32
+Scope: generated model only; caller I/O and application memory are separate.
+
+Compile-time exact
+  Semantic constants       4.2 KiB (4332 B)
+  Emitted constant payload 4.4 KiB (4508 B)
+  Activation arena         3.8 KiB (3920 B)
+  Kernel scratch           0 B
+  Total model arena        3.8 KiB (3920 B)
+  Arena alignment          16 B
+  Caller input/output      794 B (784 B + 10 B; not in arena)
+  Generated-model heap     0 calls
+
+Peak live working payload
+  3.8 KiB (3920 B) at max_pool2d
+    relu: offset 0, 3.1 KiB (3136 B), steps 0..1
+    max_pool2d: offset 3136, 784 B, steps 1..2
+
+Reused arena regions
+  offset 0, 1.5 KiB (1568 B): relu -> relu_1
+  offset 1568, 392 B: relu -> max_pool2d_1
+
+Selected kernels
+  [0] conv2d: portable.conv2d_s8.v1 (portable), scratch 0 B
+  [1] max_pool2d: portable.max_pool2d_s8.v1 (portable), scratch 0 B
+  [2] conv2d_1: portable.conv2d_s8.v1 (portable), scratch 0 B
+  [3] max_pool2d_1: portable.max_pool2d_s8.v1 (portable), scratch 0 B
+  [4] flatten: portable.flatten_view.v1 (portable), scratch 0 B
+  [5] linear: portable.linear_s8.v1 (portable), scratch 0 B
+
+Not measured at AOT compile time
+  Final Flash load: requires a final target ELF/map built with the production compiler, flags, and linker script.
+  Full firmware peak SRAM: requires the final firmware and includes caller I/O, application globals, RTOS/interrupt state, and stacks.
+  Peak stack: requires target stack analysis or a physical-board high-water measurement.

@@ -1,0 +1,57 @@
+{
+  "accuracy_drop_percentage_points": -0.10000000000000009,
+  "arena_bytes": 3920,
+  "arithmetic_profile": "bakenn.int8.v1",
+  "bakenn_version": "0.1.0",
+  "c_full_test_seconds_host_including_pipes": 1.557848083321005,
+  "calibration_corpus_sha256": "06ce2a1aaaa0f75e566b9494c17b3c1fce4063272d1ce4e879c24b868bbb4e29",
+  "calibration_samples": 160,
+  "checkpoint_file_sha256": "a2f08c02a718d2e6cbe590ad442891db04308a3c82a2c791b8e0fc02186ea498",
+  "checkpoint_logical_sha256": "733130916e926da785afc63da0786d7613b0db808c3482398ae84b41ab706840",
+  "compiler": "cc",
+  "constant_bytes": 4508,
+  "epochs": 4,
+  "fp32_accuracy": 0.9692,
+  "generated_c_accuracy": 0.9702,
+  "generated_model_symbol": "bknn_mnist",
+  "input": {
+    "dtype": "int8",
+    "layout": "NHWC",
+    "qparams": {
+      "kind": "per_tensor",
+      "scale": 0.003921568859368563,
+      "zero_point": -128
+    },
+    "shape": [
+      1,
+      28,
+      28,
+      1
+    ]
+  },
+  "output": {
+    "dtype": "int8",
+    "layout": "NC",
+    "qparams": {
+      "kind": "per_tensor",
+      "scale": 0.16788659989833832,
+      "zero_point": 29
+    },
+    "shape": [
+      1,
+      10
+    ]
+  },
+  "physical_corpus_reference_accuracy": 0.99,
+  "physical_corpus_samples": 100,
+  "ptq_compile_seconds_host": 7.617764083202928,
+  "python_c_compared_bytes": 1280,
+  "python_c_mismatched_bytes": 0,
+  "reference_samples": 128,
+  "schema_version": 2,
+  "seed": 20260814,
+  "test_samples": 10000,
+  "torch_version": "2.10.0",
+  "training_performed": true,
+  "training_samples": 60000
+}

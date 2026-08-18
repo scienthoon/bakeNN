@@ -1,0 +1,35 @@
+name: Independent clean-room reproduction
+description: Volunteer to reproduce the frozen MNIST generated-C evidence
+title: "[reproduction] "
+labels: ["reproduction"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Follow `docs/CLEAN_ROOM_REPRODUCTION.md` from a fresh clone.
+        Do not report host timings as MCU performance.
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: Operating system, architecture and C compiler
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command and output
+      render: shell
+    validations:
+      required: true
+  - type: checkboxes
+    id: independence
+    attributes:
+      label: Independence statement
+      options:
+        - label: I used a fresh public clone and had no access to uncommitted BakeNN source or results.
+          required: true
+        - label: I did not edit source, evidence or expected values to make the verifier pass.
+          required: true
+        - label: I understand this is host correctness evidence, not a physical performance benchmark.
+          required: true

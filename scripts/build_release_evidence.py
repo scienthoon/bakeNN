@@ -22,13 +22,22 @@ FIXED_FILES = (
     "STABILITY.md",
     "THIRD_PARTY_NOTICES.md",
     ".github/release-notes/v0.1.0.md",
+    "docs/CLEAN_ROOM_REPRODUCTION.md",
+    "docs/COMPARISON.md",
+    "docs/SUBMISSION_P0_STATUS.md",
     "benchmarks/RESULTS.md",
+    "benchmarks/physical/README.md",
+    "benchmarks/cross_build/README.md",
     "benchmarks/esp32/README.md",
+    "benchmarks/microtvm_compare/README.md",
     "benchmarks/tflm_compare/README.md",
 )
 EVIDENCE_DIRECTORIES = (
     "benchmarks/esp32/results",
     "benchmarks/tflm_compare/results",
+    "benchmarks/cross_build/results",
+    "benchmarks/microtvm_compare/results",
+    "examples/mnist/evidence",
 )
 
 
@@ -73,7 +82,7 @@ def _tracked_evidence() -> dict[str, bytes]:
         entries[relative] = path.read_bytes()
     for relative in EVIDENCE_DIRECTORIES:
         directory = REPOSITORY / relative
-        for path in sorted(directory.iterdir()):
+        for path in sorted(directory.rglob("*")):
             if path.is_file() and not path.name.startswith("."):
                 name = path.relative_to(REPOSITORY).as_posix()
                 entries[name] = path.read_bytes()

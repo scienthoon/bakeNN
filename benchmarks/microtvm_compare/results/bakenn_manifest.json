@@ -1,0 +1,290 @@
+{
+  "activation_arena_bytes": 3920,
+  "arena_alignment": 16,
+  "arena_bytes": 4064,
+  "arithmetic_profile": "bakenn.int8.v1",
+  "backend": {
+    "cmsis_nn_enabled": true,
+    "esp_nn_enabled": false,
+    "kernel_policy": "auto",
+    "name": "c11",
+    "optimized_steps": 5,
+    "selections": [
+      {
+        "implementation": "cmsis_nn.conv2d_s8.v4.0.0",
+        "optimized": true,
+        "packed_constants": [],
+        "rejected_implementations": {
+          "cortex_m4.conv2d_1x1_smlad.v1": "Cortex-M4 1x1 kernel requires matching OHWI int8 weights",
+          "cortex_m4.conv2d_3x3_im2col_smlad.v1": "lower selection priority than cmsis_nn.conv2d_s8.v4.0.0",
+          "esp_nn.esp32s3.conv2d_s8.v1.2.6": "ESP-NN source bundling is disabled",
+          "optimized.conv2d_1x1_o2.v1": "Conv2D weight must be an OI 1x1 int8 matrix",
+          "portable.conv2d_s8.v1": "lower selection priority than cmsis_nn.conv2d_s8.v4.0.0"
+        },
+        "scratch_alignment": 4,
+        "scratch_bytes": 36,
+        "selection_reason": "pinned CMSIS-NN v4 Conv2D wrapper supports this ARMv7E-M DSP NHWC/OHWI shape",
+        "step_index": 0,
+        "step_name": "conv2d"
+      },
+      {
+        "implementation": "cmsis_nn.max_pool2d_s8.v4.0.0",
+        "optimized": true,
+        "packed_constants": [],
+        "rejected_implementations": {
+          "cortex_m4.max_pool2d_2x2_s2.v1": "lower selection priority than cmsis_nn.max_pool2d_s8.v4.0.0",
+          "esp_nn.esp32s3.max_pool2d_s8.v1.2.6": "ESP-NN source bundling is disabled",
+          "portable.max_pool2d_s8.v1": "lower selection priority than cmsis_nn.max_pool2d_s8.v4.0.0"
+        },
+        "scratch_alignment": 1,
+        "scratch_bytes": 0,
+        "selection_reason": "pinned CMSIS-NN v4 MaxPool supports this ARMv7E-M DSP shape",
+        "step_index": 1,
+        "step_name": "max_pool2d"
+      },
+      {
+        "implementation": "cmsis_nn.conv2d_s8.v4.0.0",
+        "optimized": true,
+        "packed_constants": [],
+        "rejected_implementations": {
+          "cortex_m4.conv2d_1x1_smlad.v1": "Cortex-M4 1x1 kernel requires matching OHWI int8 weights",
+          "cortex_m4.conv2d_3x3_im2col_smlad.v1": "lower selection priority than cmsis_nn.conv2d_s8.v4.0.0",
+          "esp_nn.esp32s3.conv2d_s8.v1.2.6": "ESP-NN source bundling is disabled",
+          "optimized.conv2d_1x1_o2.v1": "Conv2D weight must be an OI 1x1 int8 matrix",
+          "portable.conv2d_s8.v1": "lower selection priority than cmsis_nn.conv2d_s8.v4.0.0"
+        },
+        "scratch_alignment": 4,
+        "scratch_bytes": 144,
+        "selection_reason": "pinned CMSIS-NN v4 Conv2D wrapper supports this ARMv7E-M DSP NHWC/OHWI shape",
+        "step_index": 2,
+        "step_name": "conv2d_1"
+      },
+      {
+        "implementation": "cmsis_nn.max_pool2d_s8.v4.0.0",
+        "optimized": true,
+        "packed_constants": [],
+        "rejected_implementations": {
+          "cortex_m4.max_pool2d_2x2_s2.v1": "lower selection priority than cmsis_nn.max_pool2d_s8.v4.0.0",
+          "esp_nn.esp32s3.max_pool2d_s8.v1.2.6": "ESP-NN source bundling is disabled",
+          "portable.max_pool2d_s8.v1": "lower selection priority than cmsis_nn.max_pool2d_s8.v4.0.0"
+        },
+        "scratch_alignment": 1,
+        "scratch_bytes": 0,
+        "selection_reason": "pinned CMSIS-NN v4 MaxPool supports this ARMv7E-M DSP shape",
+        "step_index": 3,
+        "step_name": "max_pool2d_1"
+      },
+      {
+        "implementation": "portable.flatten_view.v1",
+        "optimized": false,
+        "packed_constants": [],
+        "rejected_implementations": {},
+        "scratch_alignment": 1,
+        "scratch_bytes": 0,
+        "selection_reason": "portable C baseline is defined for this lowered step",
+        "step_index": 4,
+        "step_name": "flatten"
+      },
+      {
+        "implementation": "cmsis_nn.linear_s8.v4.0.0",
+        "optimized": true,
+        "packed_constants": [],
+        "rejected_implementations": {
+          "cortex_m4.linear_smlad.v1": "lower selection priority than cmsis_nn.linear_s8.v4.0.0",
+          "esp_nn.esp32s3.linear_per_channel_s8.v1.2.6": "ESP-NN source bundling is disabled",
+          "optimized.linear_oi2.v1": "lower selection priority than cmsis_nn.linear_s8.v4.0.0",
+          "optimized.linear_oi2_tail.v1": "output feature count has no odd tail",
+          "portable.linear_s8.v1": "lower selection priority than cmsis_nn.linear_s8.v4.0.0"
+        },
+        "scratch_alignment": 1,
+        "scratch_bytes": 0,
+        "selection_reason": "pinned CMSIS-NN v4 FullyConnected source bundle supports this per-tensor-requantized ARMv7E-M DSP Linear",
+        "step_index": 5,
+        "step_name": "linear"
+      }
+    ],
+    "target": {
+      "abi": "aapcs32-soft",
+      "architecture": "arm",
+      "arena_alignment": 8,
+      "compiler_flags": [
+        "-mcpu=cortex-m4",
+        "-mthumb",
+        "-mfloat-abi=soft"
+      ],
+      "constant_alignment": 4,
+      "cpu": "cortex-m4",
+      "features": [
+        "armv7e-m",
+        "dsp",
+        "scalar-int8",
+        "thumb"
+      ],
+      "flash_bytes": null,
+      "id": "cortex-m4",
+      "measured_cost_table": {
+        "available": false,
+        "entries": [],
+        "entry_count": 0
+      },
+      "metadata": {},
+      "sram_bytes": null,
+      "toolchain": "arm-none-eabi"
+    },
+    "weight_packing": true
+  },
+  "bundled_dependencies": [
+    {
+      "cmsis_core_version": "5.9.0",
+      "compatibility_patches": [
+        "BAKENN_CMSIS_NN_FREESTANDING suppresses unused hosted headers",
+        "BAKENN_CMSIS_NN_BUILTIN_MEMORY preserves fixed-width DSP loads",
+        "freestanding memory calls use bundled namespaced byte-loop shims",
+        "Clang excludes the GCC-only no-unroll optimize attribute",
+        "unused hosted stdio includes are removed from 1x1 Conv sources"
+      ],
+      "include_dirs": [
+        "third_party/cmsis_nn/Include",
+        "third_party/cmsis_core/Include"
+      ],
+      "licenses": [
+        "third_party/cmsis_nn/LICENSE.txt",
+        "third_party/cmsis_core/LICENSE.txt"
+      ],
+      "name": "CMSIS-NN",
+      "revision": "ca5dc34313be2ee5c46652917c30baac96c52621",
+      "sources": [
+        "third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_1_x_n_s8.c",
+        "third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_1x1_s8.c",
+        "third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_1x1_s8_fast.c",
+        "third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_s8.c",
+        "third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_wrapper_s8.c",
+        "third_party/cmsis_nn/Source/ConvolutionFunctions/arm_nn_mat_mult_kernel_s8_s16.c",
+        "third_party/cmsis_nn/Source/ConvolutionFunctions/arm_nn_mat_mult_s8.c",
+        "third_party/cmsis_nn/Source/FullyConnectedFunctions/arm_fully_connected_s8.c",
+        "third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_mat_mul_core_1x_s8.c",
+        "third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_mat_mul_core_4x_s8.c",
+        "third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_mat_mult_nt_t_s8.c",
+        "third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_vec_mat_mult_t_s8.c",
+        "third_party/cmsis_nn/Source/NNSupportFunctions/arm_q7_to_q15_with_offset.c",
+        "third_party/cmsis_nn/Source/NNSupportFunctions/bakenn_cmsis_memory.c",
+        "third_party/cmsis_nn/Source/PoolingFunctions/arm_max_pool_s8.c"
+      ],
+      "version": "4.0.0"
+    }
+  ],
+  "compiler_version": "0.1.0",
+  "constant_bytes": 4428,
+  "constant_max_alignment": 4,
+  "constant_payload_bytes": 4428,
+  "input": {
+    "dtype": "int8",
+    "layout": "NHWC",
+    "qparams": {
+      "kind": "per_tensor",
+      "scale": 0.003921568859368563,
+      "zero_point": -128
+    },
+    "shape": [
+      1,
+      28,
+      28,
+      1
+    ]
+  },
+  "memory_report": {
+    "json": "bknn_mnist_common_memory.json",
+    "schema_version": 1,
+    "text": "bknn_mnist_common_memory.txt"
+  },
+  "model": "bknn_mnist_common",
+  "operations": [
+    {
+      "accumulator_bound_max": 197464,
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "input": "value",
+      "kind": "conv2d_s8",
+      "name": "conv2d",
+      "output": "relu",
+      "padding": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "input": "relu",
+      "kind": "max_pool2d_s8",
+      "name": "max_pool2d",
+      "output": "max_pool2d"
+    },
+    {
+      "accumulator_bound_max": 526627,
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "input": "max_pool2d",
+      "kind": "conv2d_s8",
+      "name": "conv2d_1",
+      "output": "relu_1",
+      "padding": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "input": "relu_1",
+      "kind": "max_pool2d_s8",
+      "name": "max_pool2d_1",
+      "output": "max_pool2d_1"
+    },
+    {
+      "emits_kernel": false,
+      "input": "max_pool2d_1",
+      "kind": "flatten_view",
+      "name": "flatten",
+      "output": "flatten"
+    },
+    {
+      "accumulator_bound_max": 1749713,
+      "input": "flatten",
+      "kind": "linear_s8",
+      "name": "linear",
+      "output": "linear"
+    }
+  ],
+  "output": {
+    "dtype": "int8",
+    "layout": "NC",
+    "qparams": {
+      "kind": "per_tensor",
+      "scale": 0.16788659989833832,
+      "zero_point": 29
+    },
+    "shape": [
+      1,
+      10
+    ]
+  },
+  "schema_version": 3,
+  "scratch_alignment": 4,
+  "scratch_bytes": 144,
+  "scratch_offset": 3920
+}
