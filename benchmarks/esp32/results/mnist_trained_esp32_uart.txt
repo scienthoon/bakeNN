@@ -1,0 +1,60 @@
+ets Jun  8 2016 00:22:57
+
+rst:0x1 (POWERON_RESET),boot:0x17 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:6280
+load:0x40078000,len:15864
+load:0x40080400,len:3920
+entry 0x40080644
+I (27) boot: ESP-IDF v5.5.4 2nd stage bootloader
+I (27) boot: compile time Aug 20 2026 21:24:12
+I (27) boot: Multicore bootloader
+I (28) boot: chip revision: v1.1
+I (31) boot.esp32: SPI Speed      : 40MHz
+I (35) boot.esp32: SPI Mode       : DIO
+I (38) boot.esp32: SPI Flash Size : 2MB
+I (42) boot: Enabling RNG early entropy source...
+I (46) boot: Partition Table:
+I (49) boot: ## Label            Usage          Type ST Offset   Length
+I (55) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (62) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (68) boot:  2 factory          factory app      00 00 00010000 00100000
+I (75) boot: End of partition table
+I (78) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=1d0b8h (118968) map
+I (126) esp_image: segment 1: paddr=0002d0e0 vaddr=3ffb0000 size=0263ch (  9788) load
+I (130) esp_image: segment 2: paddr=0002f724 vaddr=40080000 size=008f4h (  2292) load
+I (131) esp_image: segment 3: paddr=00030020 vaddr=400d0020 size=0ed98h ( 60824) map
+I (158) esp_image: segment 4: paddr=0003edc0 vaddr=400808f4 size=0abb4h ( 43956) load
+I (176) esp_image: segment 5: paddr=0004997c vaddr=50000000 size=00020h (    32) load
+I (182) boot: Loaded app from partition at offset 0x10000
+I (182) boot: Disabling RNG early entropy source...
+I (194) cpu_start: Multicore app
+I (202) cpu_start: GPIO 3 and 1 are used as console UART I/O pins
+I (202) cpu_start: Pro cpu start user code
+I (202) cpu_start: cpu freq: 160000000 Hz
+I (204) app_init: Application information:
+I (208) app_init: Project name:     bakenn_target_smoke
+I (213) app_init: App version:      v0.1.0-3-g23f3a4f
+I (218) app_init: Compile time:     Aug 20 2026 21:24:03
+I (223) app_init: ELF file SHA256:  a8c68d7b5...
+I (227) app_init: ESP-IDF:          v5.5.4
+I (231) efuse_init: Min chip rev:     v0.0
+I (235) efuse_init: Max chip rev:     v3.99 
+I (239) efuse_init: Chip rev:         v1.1
+I (243) heap_init: Initializing. RAM available for dynamic allocation:
+I (249) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
+I (254) heap_init: At 3FFB4300 len 0002BD00 (175 KiB): DRAM
+I (259) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (264) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (270) heap_init: At 4008B4A8 len 00014B58 (82 KiB): IRAM
+I (277) spi_flash: detected chip: generic
+I (279) spi_flash: flash io: dio
+W (282) spi_flash: Detected size(4096k) larger than the size in the binary image header(2048k). Using the size in the binary image header.
+I (295) main_task: Started on CPU0
+I (305) main_task: Calling app_main()
+BAKENN_MNIST target=esp32 cpu_mhz=160 samples=100 correct=99 accuracy_bp=9900 compared_bytes=1000 mismatches=0 first_cycles=3311839 median_cycles=3165617 p95_cycles=3165617 stack_high_water_words=6752 arena=3920
+BAKENN_MNIST_OUTPUT_FNV1A=0x55fb9e60
+BAKENN_MNIST_PROVENANCE checkpoint=733130916e926da785afc63da0786d7613b0db808c3482398ae84b41ab706840 calibration=06ce2a1aaaa0f75e566b9494c17b3c1fce4063272d1ce4e879c24b868bbb4e29 input=27c96cc7e1e5b49058b8183781af349c1773b89cbfa4791b6eb098397111f653 expected=cdbbfc38bf5f17a2867b17a8a28e643043e50733063e246b0bc85cbeaae30ba4
+I (4665) main_task: Returned from app_main()

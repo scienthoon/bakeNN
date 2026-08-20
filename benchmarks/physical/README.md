@@ -12,20 +12,24 @@ kernel backend. Raw UART and machine-readable provenance are mandatory.
   BakeNN portable versus TFLM reference.
 - [Original ESP32 trained MobileNetV2-0.25](../esp32/results/mobilenet_v2_025_cifar10_esp32_tflm_espnn.md):
   BakeNN portable, BakeNN+ESP-NN and TFLM+ESP-NN.
+- [Original ESP32 trained MNIST full model](../esp32/results/mnist_trained_esp32.md):
+  100 frozen inputs, byte-exact Python/board outputs, cycles, Flash/SRAM and
+  stack watermark.
 
-## Trained MNIST full-model gate
+## Trained MNIST full-model result
 
-The repository now freezes a trained FP32 checkpoint, calibration corpus, 100
+The repository freezes a trained FP32 checkpoint, calibration corpus, 100
 class-balanced physical inputs and expected INT8 outputs under
 [`examples/mnist/evidence`](../../examples/mnist/evidence/README.md). The
-original-ESP32 project builds successfully, but it is **not listed as a
-physical result until a UART transcript from the board is checked in**.
+[physical ESP32 result](../esp32/results/mnist_trained_esp32.md) includes the
+[raw UART transcript](../esp32/results/mnist_trained_esp32_uart.txt), complete
+hash provenance and linked-memory measurements.
 
-The acceptance line must report:
+The physical acceptance line reports:
 
 ```text
 samples=100 correct=99 compared_bytes=1000 mismatches=0
 ```
 
-plus first/median/p95 cycles, output FNV-1a and all four provenance hashes.
-
+plus first/median/p95 cycles, output FNV-1a `0x55fb9e60` and all four
+provenance hashes.
