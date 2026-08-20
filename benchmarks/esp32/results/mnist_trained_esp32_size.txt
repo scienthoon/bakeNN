@@ -1,0 +1,346 @@
+$ idf.py size
+Executing action: size
+Running ninja in directory /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build
+Executing "ninja all"...
+[1/4] cd /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/esp-idf/esptool_py && /Users/kyungrae/bakeNN/build/esp-idf-tools/python_env/idf5.5_py3.14_env/bin/python /Users/kyungrae/bakeNN/build/esp-idf-v5.5.4/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/partition_table/partition-table.bin /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/bakenn_target_smoke.bin
+bakenn_target_smoke.bin binary size 0x39ab0 bytes. Smallest app partition is 0x100000 bytes. 0xc6550 bytes (77%) free.
+[2/4] Performing build step for 'bootloader'
+[1/1] cd /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/bootloader/esp-idf/esptool_py && /Users/kyungrae/bakeNN/build/esp-idf-tools/python_env/idf5.5_py3.14_env/bin/python /Users/kyungrae/bakeNN/build/esp-idf-v5.5.4/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/bootloader/bootloader.bin
+Bootloader binary size 0x6630 bytes. 0x9d0 bytes (9%) free.
+[3/4] No install step for 'bootloader'
+[4/4] Completed 'bootloader'
+Running ninja in directory /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build
+Executing "ninja size"...
+[0/1] cd /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build && /Users/kyungrae/bakeNN/build/esp-idf-tools/python_env/idf5.5_py3.14_env/lib/python3.14/site-packages/cmake/data/bin/cmake -D "IDF_SIZE_TOOL=/Users/kyungrae/bakeNN/build/esp-idf-tools/python_env/idf5.5_py3.14_env/bin/python;-m;esp_idf_size" -D MAP_FILE=/Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/bakenn_target_smoke.map -D OUTPUT_JSON= -P /Users/kyungrae/bakeNN/build/esp-idf-v5.5.4/tools/cmake/run_size_tool.cmake
+                           Memory Type Usage Summary                            
+┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
+┃ Memory            ┃              ┃          ┃                ┃               ┃
+┃ Type/Section      ┃ Used [bytes] ┃ Used [%] ┃ Remain [bytes] ┃ Total [bytes] ┃
+┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
+│ Flash Data        │       119000 │          │                │               │
+│    .rodata        │       118744 │          │                │               │
+│    .appdesc       │          256 │          │                │               │
+│ Flash Code        │        61020 │          │                │               │
+│    .text          │        61020 │          │                │               │
+│ IRAM              │        46247 │    35.28 │          84825 │        131072 │
+│    .text          │        45219 │     34.5 │                │               │
+│    .vectors       │         1028 │     0.78 │                │               │
+│ DRAM              │        17148 │     9.49 │         163588 │        180736 │
+│    .data          │         9788 │     5.42 │                │               │
+│    .bss           │         7360 │     4.07 │                │               │
+│ RTC SLOW          │           56 │     0.68 │           8136 │          8192 │
+│    .force_slow    │           32 │     0.39 │                │               │
+│    .rtc_slow_rese │           24 │     0.29 │                │               │
+│ rved              │              │          │                │               │
+└───────────────────┴──────────────┴──────────┴────────────────┴───────────────┘
+Total image size: 236087 bytes (.bin may be padded larger)
+Note: The reported total sizes may be smaller than those in the technical 
+reference manual due to reserved memory and application configuration. The total
+flash size available for the application is not included by default, as it 
+cannot be reliably determined due to the presence of other data like the 
+bootloader, partition table, and application partition size.
+
+$ python -m esp_idf_size --archives --format csv build/bakenn_target_smoke.map
+Total sizes:,,,
+Used static DRAM,17148 bytes (163588 remain 9.5% used),,,
+.data size,9788 bytes,,,
+.bss  size,7360 bytes,,,
+Used static IRAM,46247 bytes (84825 remain 35.3% used),,,
+.text size,45219 bytes,,,
+.vectors size,1028 bytes,,,
+Used Flash size ,180020 bytes,,,
+.text,61020 bytes,,,
+.rodata,118744 bytes,,,
+Total image size,236055 bytes (.bin may be padded larger),,,
+Per-archive contributions to ELF file:
+Archive File,DRAM .data,& 0.bss,IRAM0 .text,& 0.vectors,ram_st_total,Flash .text,& .rodata,& .appdesc
+libmain.a,0,5118,0,0,5118,644,79512,0
+libc.a,260,312,0,0,572,21948,1660,0
+libesp_app_format.a,0,10,0,0,10,434,22917,256
+libfreertos.a,3108,741,11279,0,15128,363,1240,0
+libesp_system.a,433,309,3281,0,4023,7086,634,0
+libesp_hw_support.a,306,77,4966,0,5349,5269,845,0
+libhal.a,2730,8,5351,0,8089,1727,58,0
+libheap.a,4,8,5711,0,5723,2443,1554,0
+libspi_flash.a,1192,16,6331,0,7539,992,1086,0
+libbakenn_model.a,0,0,0,0,0,4363,4508,0
+libesp_driver_uart.a,304,32,0,0,336,5692,548,0
+libvfs.a,192,44,0,0,236,3198,143,0
+libxtensa.a,1044,0,1789,427,3260,99,36,0
+libesp_mm.a,36,128,844,0,1008,2203,214,0
+libnewlib.a,160,200,1198,0,1558,1217,109,0
+libbootloader_support.a,0,0,1830,0,1830,77,40,0
+libesp_common.a,0,0,0,0,0,46,1814,0
+libsoc.a,40,0,37,0,77,0,1324,0
+libesp_ringbuf.a,0,0,902,0,902,0,97,0
+libesp_partition.a,0,8,0,0,8,881,37,0
+liblog.a,8,276,318,0,602,511,24,0
+libesp_vfs_console.a,0,16,0,0,16,448,180,0
+libesp_timer.a,0,8,129,0,137,350,8,0
+libxt_hal.a,0,0,443,0,443,0,32,0
+libesp_rom.a,0,0,223,0,223,0,32,0
+libefuse.a,0,0,0,0,0,203,24,0
+libapp_update.a,0,4,0,0,4,131,30,0
+libpthread.a,0,0,0,0,0,25,0,0
+libesp_security.a,0,0,0,0,0,12,8,0
+libcxx.a,0,0,0,0,0,10,0,0
+libesp_phy.a,0,0,0,0,0,5,0,0
+libnvs_sec_provider.a,0,0,0,0,0,5,0,0
+(exe),0,0,0,0,0,0,0,0
+libesp_driver_gpio.a,0,0,0,0,0,0,0,0
+libesp_driver_spi.a,0,0,0,0,0,0,0,0
+libgcc.a,0,0,0,0,0,0,0,0
+libmbedcrypto.a,0,0,0,0,0,0,0,0
+
+$ idf.py size-components
+Executing action: size-components
+Running ninja in directory /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build
+Executing "ninja all"...
+[1/4] cd /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/esp-idf/esptool_py && /Users/kyungrae/bakeNN/build/esp-idf-tools/python_env/idf5.5_py3.14_env/bin/python /Users/kyungrae/bakeNN/build/esp-idf-v5.5.4/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/partition_table/partition-table.bin /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/bakenn_target_smoke.bin
+bakenn_target_smoke.bin binary size 0x39ab0 bytes. Smallest app partition is 0x100000 bytes. 0xc6550 bytes (77%) free.
+[2/4] Performing build step for 'bootloader'
+[1/1] cd /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/bootloader/esp-idf/esptool_py && /Users/kyungrae/bakeNN/build/esp-idf-tools/python_env/idf5.5_py3.14_env/bin/python /Users/kyungrae/bakeNN/build/esp-idf-v5.5.4/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/bootloader/bootloader.bin
+Bootloader binary size 0x6630 bytes. 0x9d0 bytes (9%) free.
+[3/4] No install step for 'bootloader'
+[4/4] Completed 'bootloader'
+Running ninja in directory /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build
+Executing "ninja size-components"...
+[0/1] cd /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build && /Users/kyungrae/bakeNN/build/esp-idf-tools/python_env/idf5.5_py3.14_env/lib/python3.14/site-packages/cmake/data/bin/cmake -D "IDF_SIZE_TOOL=/Users/kyungrae/bakeNN/build/esp-idf-tools/python_env/idf5.5_py3.14_env/bin/python;-m;esp_idf_size" -D IDF_SIZE_MODE=--archives -D MAP_FILE=/Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build/bakenn_target_smoke.map -D OUTPUT_JSON= -P /Users/kyungrae/bakeNN/build/esp-idf-v5.5.4/tools/cmake/run_size_tool.cmake
+                     Per-archive contributions to ELF file                      
+┏━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━┓
+┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃ . ┃
+┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃ f ┃
+┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃ .r ┃ o ┃
+┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃ tc ┃ r ┃
+┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃ _s ┃ c ┃
+┃ Ar ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃    ┃ lo ┃ e ┃
+┃ ch ┃ To ┃    ┃    ┃    ┃    ┃    ┃    ┃ Fl ┃    ┃ Fl ┃    ┃    ┃    ┃ w_ ┃ _ ┃
+┃ iv ┃ ta ┃    ┃    ┃    ┃    ┃    ┃ .v ┃ as ┃    ┃ as ┃ .r ┃ .a ┃ RT ┃ re ┃ s ┃
+┃ e  ┃  l ┃    ┃    ┃ .d ┃    ┃ .t ┃ ec ┃  h ┃ .t ┃  h ┃ od ┃ pp ┃  C ┃ se ┃ l ┃
+┃ Fi ┃ Si ┃ DR ┃ .b ┃ at ┃ IR ┃ ex ┃ to ┃ Co ┃ ex ┃ Da ┃ at ┃ de ┃ SL ┃ rv ┃ o ┃
+┃ le ┃ ze ┃ AM ┃ ss ┃  a ┃ AM ┃  t ┃ rs ┃ de ┃  t ┃ ta ┃  a ┃ sc ┃ OW ┃ ed ┃ w ┃
+┡━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━┩
+│ li │ 85 │ 51 │ 51 │  0 │  0 │  0 │  0 │ 64 │ 64 │ 79 │ 79 │  0 │  0 │  0 │ 0 │
+│ bm │ 27 │ 18 │ 18 │    │    │    │    │  4 │  4 │ 51 │ 51 │    │    │    │   │
+│ ai │  4 │    │    │    │    │    │    │    │    │  2 │  2 │    │    │    │   │
+│ n. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 24 │ 57 │ 31 │ 26 │  0 │  0 │  0 │ 21 │ 21 │ 16 │ 16 │  0 │  0 │  0 │ 0 │
+│ bc │ 18 │  2 │  2 │  0 │    │    │    │ 94 │ 94 │ 60 │ 60 │    │    │    │   │
+│ .a │  0 │    │    │    │    │    │    │  8 │  8 │    │    │    │    │    │   │
+│ li │ 23 │ 10 │ 10 │  0 │  0 │  0 │  0 │ 43 │ 43 │ 23 │ 22 │ 25 │  0 │  0 │ 0 │
+│ be │ 61 │    │    │    │    │    │    │  4 │  4 │ 17 │ 91 │  6 │    │    │   │
+│ sp │  7 │    │    │    │    │    │    │    │    │  3 │  7 │    │    │    │   │
+│ _a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ pp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _f │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ or │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ma │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ t. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 16 │ 38 │ 74 │ 31 │ 11 │ 11 │  0 │ 36 │ 36 │ 12 │ 12 │  0 │  0 │  0 │ 0 │
+│ bf │ 73 │ 49 │  1 │ 08 │ 27 │ 27 │    │  3 │  3 │ 40 │ 40 │    │    │    │   │
+│ re │  1 │    │    │    │  9 │  9 │    │    │    │    │    │    │    │    │   │
+│ er │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ to │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ s. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 11 │ 74 │ 30 │ 43 │ 32 │ 32 │  0 │ 70 │ 70 │ 63 │ 63 │  0 │  0 │  0 │ 0 │
+│ be │ 74 │  2 │  9 │  3 │ 81 │ 81 │    │ 86 │ 86 │  4 │  4 │    │    │    │   │
+│ sp │  3 │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _s │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ys │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ te │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ m. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 11 │ 38 │ 77 │ 30 │ 49 │ 49 │  0 │ 52 │ 52 │ 84 │ 84 │  0 │ 56 │ 24 │ 3 │
+│ be │ 51 │  3 │    │  6 │ 66 │ 66 │    │ 69 │ 69 │  5 │  5 │    │    │    │ 2 │
+│ sp │  9 │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _h │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ w_ │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ su │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ pp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ or │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ t. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 98 │ 27 │  8 │ 27 │ 53 │ 53 │  0 │ 17 │ 17 │ 58 │ 58 │  0 │  0 │  0 │ 0 │
+│ bh │ 74 │ 38 │    │ 30 │ 51 │ 51 │    │ 27 │ 27 │    │    │    │    │    │   │
+│ al │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 97 │ 12 │  8 │  4 │ 57 │ 57 │  0 │ 24 │ 24 │ 15 │ 15 │  0 │  0 │  0 │ 0 │
+│ bh │ 20 │    │    │    │ 11 │ 11 │    │ 43 │ 43 │ 54 │ 54 │    │    │    │   │
+│ ea │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ p. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 95 │ 11 │ 16 │ 11 │ 63 │ 63 │  0 │ 99 │ 99 │ 10 │ 10 │  0 │  0 │  0 │ 0 │
+│ bs │ 49 │ 40 │    │ 24 │ 31 │ 31 │    │  2 │  2 │ 86 │ 86 │    │    │    │   │
+│ pi │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _f │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ la │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ sh │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 88 │  0 │  0 │  0 │  0 │  0 │  0 │ 43 │ 43 │ 45 │ 45 │  0 │  0 │  0 │ 0 │
+│ bb │ 71 │    │    │    │    │    │    │ 63 │ 63 │ 08 │ 08 │    │    │    │   │
+│ ak │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ en │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ n_ │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ mo │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ de │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ l. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 65 │ 33 │ 32 │ 30 │  0 │  0 │  0 │ 56 │ 56 │ 54 │ 54 │  0 │  0 │  0 │ 0 │
+│ be │ 76 │  6 │    │  4 │    │    │    │ 92 │ 92 │  8 │  8 │    │    │    │   │
+│ sp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _d │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ri │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ve │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ r_ │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ua │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ rt │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 35 │ 23 │ 44 │ 19 │  0 │  0 │  0 │ 31 │ 31 │ 14 │ 14 │  0 │  0 │  0 │ 0 │
+│ bv │ 77 │  6 │    │  2 │    │    │    │ 98 │ 98 │  3 │  3 │    │    │    │   │
+│ fs │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 34 │ 16 │ 12 │ 36 │ 84 │ 84 │  0 │ 22 │ 22 │ 21 │ 21 │  0 │  0 │  0 │ 0 │
+│ be │ 25 │  4 │  8 │    │  4 │  4 │    │ 03 │ 03 │  4 │  4 │    │    │    │   │
+│ sp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _m │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ m. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 33 │ 10 │  0 │ 10 │ 22 │ 17 │ 42 │ 99 │ 99 │ 36 │ 36 │  0 │  0 │  0 │ 0 │
+│ bx │ 95 │ 44 │    │ 44 │ 16 │ 89 │  7 │    │    │    │    │    │    │    │   │
+│ te │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ns │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 28 │ 36 │ 20 │ 16 │ 11 │ 11 │  0 │ 12 │ 12 │ 10 │ 10 │  0 │  0 │  0 │ 0 │
+│ bn │ 84 │  0 │  0 │  0 │ 98 │ 98 │    │ 17 │ 17 │  9 │  9 │    │    │    │   │
+│ ew │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ b. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 19 │  0 │  0 │  0 │ 18 │ 18 │  0 │ 77 │ 77 │ 40 │ 40 │  0 │  0 │  0 │ 0 │
+│ bb │ 47 │    │    │    │ 30 │ 30 │    │    │    │    │    │    │    │    │   │
+│ oo │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ tl │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ oa │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ de │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ r_ │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ su │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ pp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ or │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ t. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 18 │  0 │  0 │  0 │  0 │  0 │  0 │ 46 │ 46 │ 18 │ 18 │  0 │  0 │  0 │ 0 │
+│ be │ 60 │    │    │    │    │    │    │    │    │ 14 │ 14 │    │    │    │   │
+│ sp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _c │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ om │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ mo │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ n. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 14 │ 40 │  0 │ 40 │ 37 │ 37 │  0 │  0 │  0 │ 13 │ 13 │  0 │  0 │  0 │ 0 │
+│ bs │ 01 │    │    │    │    │    │    │    │    │ 24 │ 24 │    │    │    │   │
+│ oc │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 11 │ 28 │ 27 │  8 │ 31 │ 31 │  0 │ 51 │ 51 │ 24 │ 24 │  0 │  0 │  0 │ 0 │
+│ bl │ 37 │  4 │  6 │    │  8 │  8 │    │  1 │  1 │    │    │    │    │    │   │
+│ og │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 99 │  0 │  0 │  0 │ 90 │ 90 │  0 │  0 │  0 │ 97 │ 97 │  0 │  0 │  0 │ 0 │
+│ be │  9 │    │    │    │  2 │  2 │    │    │    │    │    │    │    │    │   │
+│ sp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _r │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ in │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ gb │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ uf │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 92 │  8 │  8 │  0 │  0 │  0 │  0 │ 88 │ 88 │ 37 │ 37 │  0 │  0 │  0 │ 0 │
+│ be │  6 │    │    │    │    │    │    │  1 │  1 │    │    │    │    │    │   │
+│ sp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _p │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ar │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ti │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ti │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ on │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 64 │ 16 │ 16 │  0 │  0 │  0 │  0 │ 44 │ 44 │ 18 │ 18 │  0 │  0 │  0 │ 0 │
+│ be │  4 │    │    │    │    │    │    │  8 │  8 │  0 │  0 │    │    │    │   │
+│ sp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _v │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ fs │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _c │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ on │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ so │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ le │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 49 │  8 │  8 │  0 │ 12 │ 12 │  0 │ 35 │ 35 │  8 │  8 │  0 │  0 │  0 │ 0 │
+│ be │  5 │    │    │    │  9 │  9 │    │  0 │  0 │    │    │    │    │    │   │
+│ sp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _t │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ im │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ er │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 47 │  0 │  0 │  0 │ 44 │ 44 │  0 │  0 │  0 │ 32 │ 32 │  0 │  0 │  0 │ 0 │
+│ bx │  5 │    │    │    │  3 │  3 │    │    │    │    │    │    │    │    │   │
+│ t_ │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ha │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ l. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 25 │  0 │  0 │  0 │ 22 │ 22 │  0 │  0 │  0 │ 32 │ 32 │  0 │  0 │  0 │ 0 │
+│ be │  5 │    │    │    │  3 │  3 │    │    │    │    │    │    │    │    │   │
+│ sp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _r │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ om │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 22 │  0 │  0 │  0 │  0 │  0 │  0 │ 20 │ 20 │ 24 │ 24 │  0 │  0 │  0 │ 0 │
+│ be │  7 │    │    │    │    │    │    │  3 │  3 │    │    │    │    │    │   │
+│ fu │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ se │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 16 │  4 │  4 │  0 │  0 │  0 │  0 │ 13 │ 13 │ 30 │ 30 │  0 │  0 │  0 │ 0 │
+│ ba │  5 │    │    │    │    │    │    │  1 │  1 │    │    │    │    │    │   │
+│ pp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _u │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ pd │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ at │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ e. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 25 │  0 │  0 │  0 │  0 │  0 │  0 │ 25 │ 25 │  0 │  0 │  0 │  0 │  0 │ 0 │
+│ bp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ th │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ re │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ad │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 20 │  0 │  0 │  0 │  0 │  0 │  0 │ 12 │ 12 │  8 │  8 │  0 │  0 │  0 │ 0 │
+│ be │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ sp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _s │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ec │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ur │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ it │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ y. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │ 10 │  0 │  0 │  0 │  0 │  0 │  0 │ 10 │ 10 │  0 │  0 │  0 │  0 │  0 │ 0 │
+│ bc │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ xx │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │  5 │  0 │  0 │  0 │  0 │  0 │  0 │  5 │  5 │  0 │  0 │  0 │  0 │  0 │ 0 │
+│ be │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ sp │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _p │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ hy │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ .a │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ li │  5 │  0 │  0 │  0 │  0 │  0 │  0 │  5 │  5 │  0 │  0 │  0 │  0 │  0 │ 0 │
+│ bn │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ vs │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _s │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ec │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ _p │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ ro │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ vi │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ de │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ r. │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+│ a  │    │    │    │    │    │    │    │    │    │    │    │    │    │    │   │
+└────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴───┘
