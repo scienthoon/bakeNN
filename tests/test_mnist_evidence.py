@@ -56,8 +56,15 @@ def test_physical_esp32_result_matches_frozen_mnist_contract() -> None:
 
     assert result["evidence_class"] == "physical_board"
     assert result["source"]["submission_commit"] == (
-        "23f3a4f744135ad02bc738a77aee531f7ff2a751"
+        "8804e7f8d4035fefc74af9a539b71ddef30ce8a5"
     )
+    assert result["source"]["measurement_source_commit"] == (
+        result["source"]["submission_commit"]
+    )
+    assert result["source"]["frozen_evidence_source_commit"] == (
+        evidence["source_commit"]
+    )
+    assert result["source"]["working_tree_at_generation"] == "clean"
     assert result["correctness"] == {
         "samples": 100,
         "correct": 99,
@@ -108,6 +115,13 @@ def test_physical_esp32_result_matches_frozen_mnist_contract() -> None:
         f"expected={artifacts['expected_output_sha256']}",
     ):
         assert token in uart
+
+    app_version_line = next(
+        line for line in uart.splitlines() if "app_init: App version:" in line
+    )
+    assert result["toolchain"]["firmware_app_version"] == "v0.1.0-5-g8804e7f"
+    assert app_version_line.endswith(result["toolchain"]["firmware_app_version"])
+    assert "-dirty" not in app_version_line
 
     memory = result["memory"]
     assert memory["static_sram_iram_plus_dram_bytes"] == (

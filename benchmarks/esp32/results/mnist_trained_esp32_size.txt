@@ -40,7 +40,6 @@ flash size available for the application is not included by default, as it
 cannot be reliably determined due to the presence of other data like the 
 bootloader, partition table, and application partition size.
 
-
 $ python -m esp_idf_size --archives --format csv build/bakenn_target_smoke.map
 Total sizes:,,,
 Used static DRAM,17148 bytes (163588 remain 9.5% used),,,
@@ -92,6 +91,7 @@ libesp_driver_gpio.a,0,0,0,0,0,0,0,0
 libesp_driver_spi.a,0,0,0,0,0,0,0,0
 libgcc.a,0,0,0,0,0,0,0,0
 libmbedcrypto.a,0,0,0,0,0,0,0,0
+
 $ idf.py size-components
 Executing action: size-components
 Running ninja in directory /Users/kyungrae/bakeNN/build/mnist_esp32_physical/esp_idf/build

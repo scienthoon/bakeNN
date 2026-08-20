@@ -1,11 +1,12 @@
 # Trained MNIST full model on a physical ESP32
 
-The frozen trained MNIST checkpoint at submission commit
-`23f3a4f744135ad02bc738a77aee531f7ff2a751` was regenerated, built with
-ESP-IDF v5.5.4, flashed to a physical original ESP32, and run over all 100
-frozen physical-test inputs. The raw-cycle logging change was measured on PR
-head `8e717e33956c1b89e176f273a31500a3c574e42b`. The board produced exactly the
-same 1,000 INT8 output bytes as the BakeNN Python reference.
+The frozen trained MNIST checkpoint and corpora recorded at evidence source
+commit `5f1245eab8ef7a7d1ec9d5d2835ebad1ae2973f6` were left unchanged. The
+benchmark was regenerated from clean measurement source commit
+`8804e7f8d4035fefc74af9a539b71ddef30ce8a5`, built with ESP-IDF v5.5.4,
+flashed to a physical original ESP32, and run over all 100 frozen physical-test
+inputs. The board produced exactly the same 1,000 INT8 output bytes as the
+BakeNN Python reference.
 
 The machine-readable record is
 [`mnist_trained_esp32.json`](mnist_trained_esp32.json), the reset-to-exit UART
@@ -51,9 +52,10 @@ parses and repeats that calculation. The subsequent correctness pass ran all
 | Firmware header Flash size | 2 MB |
 | ESP-IDF | v5.5.4, commit `735507283d5b2f9fb363a1901172dbd9e847945d` |
 | Compiler | xtensa-esp-elf GCC 14.2.0, crosstool-NG `esp-14.2.0_20260121` |
+| Firmware app version | `v0.1.0-5-g8804e7f` (clean; no `-dirty` suffix) |
 | Optimization | ESP-IDF size profile (`-Os`); BakeNN model component final `-O2` |
 | Flash interface | DIO at 40 MHz |
-| Capture | 115,200 baud, started 2026-08-20 22:22:01 KST |
+| Capture | 115,200 baud, started 2026-08-20 23:38:40 KST |
 
 The chip and Flash values were queried with esptool as part of this run. PSRAM
 was not enabled or used.
@@ -94,7 +96,8 @@ main-task stack is 8,192 bytes.
 
 | Artifact | SHA-256 |
 |---|---|
-| Submission commit | `23f3a4f744135ad02bc738a77aee531f7ff2a751` |
+| Measurement source commit | `8804e7f8d4035fefc74af9a539b71ddef30ce8a5` |
+| Frozen evidence source commit | `5f1245eab8ef7a7d1ec9d5d2835ebad1ae2973f6` |
 | Checkpoint file | `a2f08c02a718d2e6cbe590ad442891db04308a3c82a2c791b8e0fc02186ea498` |
 | Logical checkpoint tensors | `733130916e926da785afc63da0786d7613b0db808c3482398ae84b41ab706840` |
 | Calibration corpus | `06ce2a1aaaa0f75e566b9494c17b3c1fce4063272d1ce4e879c24b868bbb4e29` |
@@ -103,11 +106,11 @@ main-task stack is 8,192 bytes.
 | Expected/board output | `cdbbfc38bf5f17a2867b17a8a28e643043e50733063e246b0bc85cbeaae30ba4` |
 | ESP32 generated component set | `93cd905ef56862a9ba628b24e8355e9e2481d178cb6107384e282ab08dc53fcf` |
 | Benchmark contract | `45d36e5549f1a46e5b830daeea786a2a1d10b80d370ad4474c5f8a3a1baad6d9` |
-| Firmware ELF | `e4c8609a8197738420a7e8793093f9f65f7d5abd227e05841ca07f3ba51becbe` |
-| Application binary | `2cee8f9ac35803e151cfe92addfc60ed5996692d1ceffb020174b996d89a9950` |
+| Firmware ELF | `6c5c358266b605b3c721ca4ba5984b0eca32907b96fa6dca7f189dc813b337a6` |
+| Application binary | `2907f69d5335edee9101bf99bffc300012ba47ca9bd4fab1f71431495dcb7bd2` |
 | Link map | `6f30e49a3dca014e326569cfa13b42c933437128335c7652261535b5312f1269` |
-| UART transcript | `b973db7f695e66b56277a7cfaa6db010c095338aa71ca9e14cd5f32385e94d6a` |
-| Size command output | `5f528cd838b25c3bcd20db5fc935f231584a98c7192c73e55ae8622f869d0316` |
+| UART transcript | `3857e49e45687e41327b626de4192ecf502b3a377df23b87ba38d7c1b815a90d` |
+| Size command output | `68911e9685fa7d65902bf2130111bc21868c642030198fb95cf04fe10b2a8105` |
 
 The ESP32 component-set hash covers the 19 files actually supplied to the
 ESP-IDF model component, including generated model sources, manifest, component
@@ -117,11 +120,12 @@ CMake file, and pinned ESP-NN source subset. It uses the
 
 ## Reproduction
 
-From a clean checkout of the submission commit, install the Torch example
+From a clean checkout of the measurement source commit, install the Torch example
 dependencies and regenerate the project:
 
 ```bash
-git checkout 23f3a4f744135ad02bc738a77aee531f7ff2a751
+git checkout 8804e7f8d4035fefc74af9a539b71ddef30ce8a5
+test -z "$(git status --short)"
 python -m pip install -e '.[torch]' 'torchvision==0.25.0'
 PYTHONPATH=src python examples/mnist/generate_esp32_benchmark.py
 ```
