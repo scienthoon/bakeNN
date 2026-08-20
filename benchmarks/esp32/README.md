@@ -12,8 +12,8 @@ BakeNN Python INT8 reference.
 
 The [trained MNIST full-model result](results/mnist_trained_esp32.md) runs 100
 frozen class-balanced inputs on the board, matches all 1,000 Python reference
-output bytes, and records cycles, linked Flash/SRAM, stack watermark, raw UART
-and complete artifact hashes.
+output bytes, and records cycles, linked Flash/SRAM, stack watermark, raw UART,
+raw size-command output and complete artifact hashes.
 
 The same frozen graph was also measured through BakeNN portable C and the
 official Espressif TFLM + ESP-NN components.  All three board outputs matched

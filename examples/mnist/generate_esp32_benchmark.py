@@ -128,6 +128,11 @@ void app_main(void) {{
         measured_cycles[run] = esp_cpu_get_cycle_count() - start;
         vTaskDelay(1);
     }}
+    printf("BAKENN_MNIST_CYCLES=");
+    for (uint32_t run = 0u; run < 101u; ++run) {{
+        printf("%s%" PRIu32, run == 0u ? "" : ",", measured_cycles[run]);
+    }}
+    printf("\\n");
     sort_cycles();
 
     uint32_t correct = 0u;

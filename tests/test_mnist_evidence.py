@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 from scripts.verify_mnist_evidence import verify
@@ -50,6 +51,8 @@ def test_physical_esp32_result_matches_frozen_mnist_contract() -> None:
     )
     uart_path = root / "benchmarks/esp32/results/mnist_trained_esp32_uart.txt"
     uart = uart_path.read_text(encoding="utf-8")
+    size_path = root / "benchmarks/esp32/results/mnist_trained_esp32_size.txt"
+    size_output = size_path.read_text(encoding="utf-8")
 
     assert result["evidence_class"] == "physical_board"
     assert result["source"]["submission_commit"] == (
@@ -89,6 +92,9 @@ def test_physical_esp32_result_matches_frozen_mnist_contract() -> None:
         cross_build["artifacts"]["contract_sha256"]
     )
     assert artifacts["uart_sha256"] == hashlib.sha256(uart_path.read_bytes()).hexdigest()
+    assert artifacts["size_output_sha256"] == hashlib.sha256(
+        size_path.read_bytes()
+    ).hexdigest()
 
     for token in (
         "samples=100",
@@ -108,3 +114,66 @@ def test_physical_esp32_result_matches_frozen_mnist_contract() -> None:
         memory["iram_bytes"] + memory["dram_bytes"]
     )
     assert memory["stack_high_water_free_bytes"] > 0
+
+    raw_cycle_lines = [
+        line for line in uart.splitlines() if line.startswith("BAKENN_MNIST_CYCLES=")
+    ]
+    assert len(raw_cycle_lines) == 1
+    raw_cycles = [
+        int(value)
+        for value in raw_cycle_lines[0].removeprefix(
+            "BAKENN_MNIST_CYCLES="
+        ).split(",")
+    ]
+    assert len(raw_cycles) == result["latency"]["measured_runs"] == 101
+    sorted_cycles = sorted(raw_cycles)
+    assert sorted_cycles[50] == result["latency"]["median_cycles"]
+    assert sorted_cycles[95] == result["latency"]["p95_cycles"]
+
+    summary_line = next(
+        line for line in uart.splitlines() if line.startswith("BAKENN_MNIST target=")
+    )
+    summary = dict(field.split("=", 1) for field in summary_line.split()[1:])
+    assert int(summary["first_cycles"]) == result["latency"]["first_cycles"]
+    assert int(summary["median_cycles"]) == sorted_cycles[50]
+    assert int(summary["p95_cycles"]) == sorted_cycles[95]
+
+    assert "$ idf.py size" in size_output
+    assert "$ idf.py size-components" in size_output
+
+    def size_table_value(name: str) -> int:
+        match = re.search(
+            rf"^│\s*{re.escape(name)}\s*│\s*(\d+)\s*│",
+            size_output,
+            re.MULTILINE,
+        )
+        assert match is not None
+        return int(match.group(1))
+
+    assert size_table_value("Flash Data") == memory["flash_data_bytes"]
+    assert size_table_value("Flash Code") == memory["flash_code_bytes"]
+    assert size_table_value("IRAM") == memory["iram_bytes"]
+    assert size_table_value("DRAM") == memory["dram_bytes"]
+    assert size_table_value("RTC SLOW") == memory["rtc_slow_bytes"]
+
+    app_binary = re.search(
+        r"bakenn_target_smoke\.bin binary size 0x([0-9a-f]+) bytes",
+        size_output,
+    )
+    total_image = re.search(r"Total image size: (\d+) bytes", size_output)
+    assert app_binary is not None
+    assert total_image is not None
+    assert int(app_binary.group(1), 16) == memory["app_binary_bytes"]
+    assert int(total_image.group(1)) == memory["elf_total_image_bytes"]
+
+    model_archive = re.search(
+        r"^libbakenn_model\.a,0,0,0,0,0,(\d+),(\d+),0$",
+        size_output,
+        re.MULTILINE,
+    )
+    assert model_archive is not None
+    model_code = int(model_archive.group(1))
+    model_data = int(model_archive.group(2))
+    assert model_code == memory["model_component_flash_code_bytes"]
+    assert model_data == memory["model_component_flash_data_bytes"]
+    assert model_code + model_data == memory["model_component_flash_bytes"]

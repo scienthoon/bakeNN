@@ -22,7 +22,8 @@ The repository freezes a trained FP32 checkpoint, calibration corpus, 100
 class-balanced physical inputs and expected INT8 outputs under
 [`examples/mnist/evidence`](../../examples/mnist/evidence/README.md). The
 [physical ESP32 result](../esp32/results/mnist_trained_esp32.md) includes the
-[raw UART transcript](../esp32/results/mnist_trained_esp32_uart.txt), complete
+[raw UART transcript](../esp32/results/mnist_trained_esp32_uart.txt), raw
+[size-command output](../esp32/results/mnist_trained_esp32_size.txt), complete
 hash provenance and linked-memory measurements.
 
 The physical acceptance line reports:
