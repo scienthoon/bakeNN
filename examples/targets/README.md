@@ -56,16 +56,18 @@ bytes, current-thread unused stack bytes, and the exact INT8 output over UART.
 For FIT IoT-LAB, reserve one `nrf52840dk` node at Saclay and flash
 `build/zephyr/zephyr.elf`. The reservation clock starts immediately, so build
 the firmware before submitting an as-soon-as-possible experiment.
-The fixture uses `--kernel-policy auto` by default so that the Cortex-M4 DSP
-kernel is actually exercised. Pass `--kernel-policy portable` to produce the
-same model with the baseline kernel for an A/B measurement.
+The fixture uses `--kernel-policy static_priority` by default so that the
+Cortex-M4 DSP kernel is actually exercised. Pass `--kernel-policy portable` to
+produce the same model with the baseline kernel for an A/B measurement. The
+legacy `auto` spelling remains accepted but is deprecated because it does not
+mean measured-fastest selection.
 
 For an FP32 PyTorch model whose `Linear` layers should use the pinned direct
 CMSIS-NN backend, opt in at compilation time:
 
 ```python
 options = bakenn.CBackendOptions(
-    kernel_policy=bakenn.KernelPolicy.AUTO,
+    kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
     enable_cmsis_nn=True,
     target=bakenn.CORTEX_M4,
 )
@@ -75,6 +77,9 @@ compiled = bakenn.compile_torch_ptq(
     calibration_data,
     "build/model",
     backend_options=options,
+    ptq_options=bakenn.PTQOptions(
+        linear_weight_granularity=bakenn.LinearWeightGranularity.PER_TENSOR,
+    ),
     target=bakenn.CORTEX_M4,
 )
 project = bakenn.export_zephyr_project(
@@ -86,12 +91,13 @@ project = bakenn.export_zephyr_project(
 
 BakeNN copies the exact CMSIS-NN FC source closure, CMSIS Core headers, and
 Apache-2.0 license files into the generated artifact. The firmware links those
-sources directly; TFLM is not required. `AUTO` falls back to BakeNN kernels if
-the target, tensor shape, or quantization contract is incompatible. The FC v4
-path requires one shared weight/requantization scale per `Linear`; the opt-in
-therefore selects per-tensor Linear weight PTQ instead of BakeNN's default
-per-output-channel policy. Use an explicit `PTQOptions` value when accuracy
-policy must be selected independently of the backend.
+sources directly; TFLM is not required. `STATIC_PRIORITY` falls back to BakeNN
+kernels if the target, tensor shape, or quantization contract is incompatible. The FC v4
+path requires one shared weight/requantization scale per `Linear`, so the
+example opts into per-tensor Linear weight PTQ explicitly. Backend selection
+never changes PTQ granularity implicitly; removing that `PTQOptions` value
+keeps BakeNN's per-output-channel default and causes CMSIS FC to fall back when
+its quantization capability does not match.
 
 When integrating the generated directory manually with CMake, consume all
 three variables from `bakenn_sources.cmake`: `BAKENN_MODEL_SOURCES`,

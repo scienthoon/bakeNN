@@ -27,7 +27,7 @@ from .support import require_compiler
 
 def _options(*, target=CORTEX_M4, packing: bool = True) -> bakenn.CBackendOptions:  # type: ignore[no-untyped-def]
     return bakenn.CBackendOptions(
-        kernel_policy=bakenn.KernelPolicy.AUTO,
+        kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
         enable_weight_packing=packing,
         enable_cmsis_nn=True,
         target=target,
@@ -340,7 +340,9 @@ def test_cmsis_nn_fc_cross_links_without_tflm_or_unresolved_symbols(
     assert report.forbidden_symbols == ()
 
 
-def test_torch_ptq_selects_cmsis_compatible_linear_quantization(tmp_path: Path) -> None:
+def test_torch_ptq_selects_cmsis_fc_only_with_explicit_per_tensor_ptq(
+    tmp_path: Path,
+) -> None:
     torch = pytest.importorskip("torch")
 
     class MnistMLP(torch.nn.Module):
@@ -366,6 +368,9 @@ def test_torch_ptq_selects_cmsis_compatible_linear_quantization(tmp_path: Path) 
         tmp_path,
         name="mnist_mlp_cmsis",
         backend_options=_options(),
+        ptq_options=bakenn.PTQOptions(
+            linear_weight_granularity=bakenn.LinearWeightGranularity.PER_TENSOR
+        ),
         target=CORTEX_M4,
     )
     linear_selections = [
@@ -383,6 +388,66 @@ def test_torch_ptq_selects_cmsis_compatible_linear_quantization(tmp_path: Path) 
             qparams = compiled.graph.values[op.weight].qparams
             assert isinstance(qparams, PerAxisQParams)
             assert len(set(qparams.scales)) == 1
+
+
+def test_cmsis_static_priority_preserves_default_ptq_and_small_fc_falls_back(
+    tmp_path: Path,
+) -> None:
+    torch = pytest.importorskip("torch")
+
+    model = torch.nn.Linear(4, 4).eval()
+    with torch.no_grad():
+        for channel in range(4):
+            model.weight[channel].mul_(float(channel + 1))
+    example = torch.zeros(1, 4)
+    calibration = torch.tensor(
+        [
+            [-2.0, -1.0, 0.5, 1.5],
+            [1.0, -0.5, 2.0, -1.5],
+            [0.25, 0.75, -1.25, 2.5],
+            [-0.75, 1.25, -2.5, 0.5],
+        ]
+    )
+    portable = bakenn.compile_torch_ptq(
+        model,
+        example,
+        calibration,
+        tmp_path / "portable",
+        backend_options=bakenn.CBackendOptions(
+            kernel_policy=bakenn.KernelPolicy.PORTABLE,
+            target=CORTEX_M4,
+        ),
+        target=CORTEX_M4,
+    )
+    cmsis_options = _options()
+    cmsis = bakenn.compile_torch_ptq(
+        model,
+        example,
+        calibration,
+        tmp_path / "cmsis_static_priority",
+        backend_options=cmsis_options,
+        target=CORTEX_M4,
+    )
+    portable_linear = next(
+        op for op in portable.graph.ops if isinstance(op, LinearOp)
+    )
+    cmsis_linear = next(op for op in cmsis.graph.ops if isinstance(op, LinearOp))
+    portable_qparams = portable.graph.values[portable_linear.weight].qparams
+    cmsis_qparams = cmsis.graph.values[cmsis_linear.weight].qparams
+    assert isinstance(portable_qparams, PerAxisQParams)
+    assert isinstance(cmsis_qparams, PerAxisQParams)
+    assert len(set(cmsis_qparams.scales)) > 1
+    assert cmsis_qparams == portable_qparams
+    np.testing.assert_array_equal(
+        cmsis.graph.constants[cmsis_linear.weight],
+        portable.graph.constants[portable_linear.weight],
+    )
+    selection = cmsis.artifacts.backend_plan.selections[0]
+    assert selection.kernel_id == "portable.linear_s8.v1"
+    assert "below the CMSIS-NN threshold" in selection.rejected[
+        "cmsis_nn.linear_s8.v4.0.0"
+    ]
+    assert not cmsis.artifacts.support_sources
 
 
 def test_cmsis_opt_in_does_not_change_ptq_when_policy_forces_portable(

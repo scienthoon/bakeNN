@@ -49,7 +49,7 @@ def test_mixed_optimized_and_portable_whole_model_is_byte_exact(
         graph,
         tmp_path,
         backend_options=bakenn.CBackendOptions(
-            kernel_policy=bakenn.KernelPolicy.AUTO
+            kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY
         ),
     )
     implementations = [
@@ -100,7 +100,7 @@ def test_tied_linear_weight_emits_one_shared_packed_constant(
         graph,
         tmp_path,
         backend_options=bakenn.CBackendOptions(
-            kernel_policy=bakenn.KernelPolicy.AUTO
+            kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY
         ),
     )
     backend = compiled.artifacts.backend_plan

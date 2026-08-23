@@ -148,8 +148,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--kernel-policy",
-        choices=("portable", "auto", "require_optimized"),
-        default="auto",
+        choices=("portable", "static_priority", "measured", "auto", "require_optimized"),
+        default="static_priority",
     )
     parser.add_argument("--cross-build", action="store_true")
     parser.add_argument("--esp-idf", action="store_true")

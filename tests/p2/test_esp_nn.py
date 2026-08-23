@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 import os
 from pathlib import Path
@@ -19,6 +20,7 @@ from bakenn.ir import (
     QuantizedGraph,
     TensorType,
 )
+from bakenn.ir.ops.pool import AVERAGE_POOL_PROFILE_TFLITE_RAW_V1
 from bakenn.targets import ESP32, ESP32_S3, export_esp_idf_project
 from tests.p0.model_fixtures import residual_ds_cnn_graph
 from tests.p2.test_backend_selection import linear_graph
@@ -26,7 +28,7 @@ from tests.p2.test_backend_selection import linear_graph
 from .support import require_compiler
 
 
-def _options(target, *, policy=bakenn.KernelPolicy.AUTO):  # type: ignore[no-untyped-def]
+def _options(target, *, policy=bakenn.KernelPolicy.STATIC_PRIORITY):  # type: ignore[no-untyped-def]
     return bakenn.CBackendOptions(
         kernel_policy=policy,
         enable_esp_nn=True,
@@ -349,6 +351,27 @@ def test_esp_nn_fallbacks_are_explicit_and_require_optimized_fails_closed(
     ]
     assert "centered half-away rounding" in rejected
 
+    tflite_average = replace(
+        average_tie,
+        name="esp_nn_AveragePool2DOp_tflite_raw",
+        ops=(
+            replace(
+                average_tie.ops[0],
+                arithmetic_profile=AVERAGE_POOL_PROFILE_TFLITE_RAW_V1,
+            ),
+        ),
+    )
+    raw_compiled, raw_executable = _compile_host(
+        tflite_average,
+        tmp_path / "average_tflite_raw",
+        ESP32_S3,
+        "clang",
+    )
+    assert raw_compiled.artifacts.backend_plan.selections[0].kernel_id == (
+        "esp_nn.esp32s3.average_pool2d_s8.v1.2.6"
+    )
+    _compare(raw_compiled, raw_executable, count=512, seed=20260824)
+
     small_linear = linear_graph(3, 5)
     with pytest.raises(CompileError, match="no supported implementation"):
         bakenn.compile(
@@ -364,7 +387,7 @@ def test_esp_nn_fallbacks_are_explicit_and_require_optimized_fails_closed(
         residual_ds_cnn_graph(),
         tmp_path / "disabled",
         backend_options=bakenn.CBackendOptions(
-            kernel_policy=bakenn.KernelPolicy.AUTO,
+            kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
             target=ESP32,
         ),
         target=ESP32,
@@ -415,8 +438,12 @@ def test_esp_nn_bundle_and_esp_idf_project_are_pinned_and_self_contained(
     assert "esp_nn_conv_esp32s3.c" in component_cmake
     assert "esp_nn_depthwise_conv_opt.c" in component_cmake
     assert "esp_nn_conv_s8_mult8_1x1_esp32s3.S" in component_cmake
-    assert (project.component / "third_party/esp_nn/include/esp_nn.h").is_file()
-    assert (project.component / "third_party/esp_nn/LICENSE").is_file()
+    assert (
+        project.component / "generated/third_party/esp_nn/include/esp_nn.h"
+    ).is_file()
+    assert (
+        project.component / "generated/third_party/esp_nn/LICENSE"
+    ).is_file()
     assert _official_s3_scratch_sizes(artifacts, tmp_path) == (336, 32)
 
 

@@ -15,9 +15,9 @@
   "implementations": {
     "bakenn": {
       "metrics": {
-        "elf_flash_data_load_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
-        "elf_flash_rodata_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
-        "elf_flash_text_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_data_load_bytes": {"reason": "The exact ELF SHA-256 was recorded, but the ELF bytes and original section map were not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_rodata_bytes": {"reason": "The exact ELF SHA-256 was recorded, but the ELF bytes and original section map were not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_text_bytes": {"reason": "The exact ELF SHA-256 was recorded, but the ELF bytes and original section map were not retained.", "status": "unmeasured", "value": null},
         "elf_flash_total_bytes": {"reason": null, "status": "measured", "value": 20920},
         "inference_median_cycles": {"reason": null, "status": "measured", "value": 3786},
         "inference_p95_cycles": {"reason": null, "status": "measured", "value": 3786},
@@ -36,9 +36,9 @@
     },
     "tflm": {
       "metrics": {
-        "elf_flash_data_load_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
-        "elf_flash_rodata_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
-        "elf_flash_text_bytes": {"reason": "The exact ELF is retained, but the original section map was not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_data_load_bytes": {"reason": "The exact ELF SHA-256 was recorded, but the ELF bytes and original section map were not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_rodata_bytes": {"reason": "The exact ELF SHA-256 was recorded, but the ELF bytes and original section map were not retained.", "status": "unmeasured", "value": null},
+        "elf_flash_text_bytes": {"reason": "The exact ELF SHA-256 was recorded, but the ELF bytes and original section map were not retained.", "status": "unmeasured", "value": null},
         "elf_flash_total_bytes": {"reason": null, "status": "measured", "value": 69640},
         "inference_median_cycles": {"reason": null, "status": "measured", "value": 5418},
         "inference_p95_cycles": {"reason": null, "status": "measured", "value": 5418},

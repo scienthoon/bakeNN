@@ -33,9 +33,12 @@ expected output hash:      cdbbfc38bf5f17a2867b17a8a28e643043e50733063e246b0bc85
 ```
 
 These values are also machine-readable in
-[`evidence/mnist_evidence.json`](evidence/mnist_evidence.json). The ESP32
-cross-build is not presented as a physical benchmark until its UART transcript
-is checked in.
+[`evidence/mnist_evidence.json`](evidence/mnist_evidence.json). The frozen
+100-image corpus was subsequently executed on a physical original ESP32 with
+1,000/1,000 output bytes matching the Python reference and 3,165,624 median
+cycles at 160 MHz. The board identity, raw UART, ELF/map-derived sizes and
+artifact hashes are recorded in
+[`../../benchmarks/esp32/results/mnist_trained_esp32.md`](../../benchmarks/esp32/results/mnist_trained_esp32.md).
 
 The generated ABI for this run was:
 

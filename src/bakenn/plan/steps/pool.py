@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
+from bakenn.ir.ops.pool import (
+    AVERAGE_POOL_PROFILE_BAKENN_V1,
+    AVERAGE_POOL_PROFILES,
+)
+
 
 @dataclass(frozen=True)
 class AveragePool2DStep:
@@ -17,7 +22,13 @@ class AveragePool2DStep:
     activation_min: int
     activation_max: int
     accumulator_bound: int
-    arithmetic_profile: str = "bakenn.int8.average_pool2d.v1"
+    arithmetic_profile: str = AVERAGE_POOL_PROFILE_BAKENN_V1
+
+    def __post_init__(self) -> None:
+        if self.arithmetic_profile not in AVERAGE_POOL_PROFILES:
+            raise ValueError(
+                f"unsupported AveragePool2D arithmetic profile: {self.arithmetic_profile}"
+            )
 
     @property
     def inputs(self) -> tuple[str, ...]:

@@ -16,6 +16,13 @@
  * limitations under the License.
  */
 
+/*
+ * Modified by the BakeNN project from CMSIS-NN 4.0.0
+ * (ca5dc34313be2ee5c46652917c30baac96c52621): add an explicitly gated
+ * freestanding memcpy/memset shim and avoid hosted math headers in that mode.
+ * See BAKENN_PROVENANCE.md for the upstream and patched file hashes.
+ */
+
 /******************************************************************************
  * @file     arm_nn_math_types.h
  * @brief    Compiler include and basic types

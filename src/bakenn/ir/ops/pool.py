@@ -4,6 +4,13 @@ from dataclasses import dataclass
 from numbers import Integral
 
 
+AVERAGE_POOL_PROFILE_BAKENN_V1 = "bakenn.int8.average_pool2d.v1"
+AVERAGE_POOL_PROFILE_TFLITE_RAW_V1 = "tflite.int8.average_pool2d.raw_code.v1"
+AVERAGE_POOL_PROFILES = frozenset(
+    (AVERAGE_POOL_PROFILE_BAKENN_V1, AVERAGE_POOL_PROFILE_TFLITE_RAW_V1)
+)
+
+
 def _pair(value: tuple[int, int], description: str) -> tuple[int, int]:
     normalized = tuple(value)
     if len(normalized) != 2 or any(
@@ -43,6 +50,7 @@ class AveragePool2DOp:
     padding: tuple[int, int, int, int] = (0, 0, 0, 0)
     activation_min: int = -128
     activation_max: int = 127
+    arithmetic_profile: str = AVERAGE_POOL_PROFILE_BAKENN_V1
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "kernel", _pair(self.kernel, "kernel"))
@@ -51,6 +59,10 @@ class AveragePool2DOp:
         low, high = _clamp(self.activation_min, self.activation_max)
         object.__setattr__(self, "activation_min", low)
         object.__setattr__(self, "activation_max", high)
+        if self.arithmetic_profile not in AVERAGE_POOL_PROFILES:
+            raise ValueError(
+                f"unsupported AveragePool2D arithmetic profile: {self.arithmetic_profile}"
+            )
 
     @property
     def inputs(self) -> tuple[str, ...]:
@@ -89,4 +101,10 @@ class MaxPool2DOp:
         return (self.output,)
 
 
-__all__ = ["AveragePool2DOp", "MaxPool2DOp"]
+__all__ = [
+    "AVERAGE_POOL_PROFILE_BAKENN_V1",
+    "AVERAGE_POOL_PROFILE_TFLITE_RAW_V1",
+    "AVERAGE_POOL_PROFILES",
+    "AveragePool2DOp",
+    "MaxPool2DOp",
+]

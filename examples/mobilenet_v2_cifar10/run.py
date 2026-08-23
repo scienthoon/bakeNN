@@ -345,7 +345,7 @@ def main() -> int:
         arguments.output / "generated_portable",
         name="mobilenet_v2_025_cifar10",
         backend_options=bakenn.CBackendOptions(
-            kernel_policy=bakenn.KernelPolicy.AUTO,
+            kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
         ),
     )
     ptq_seconds = time.perf_counter() - compile_started
@@ -370,7 +370,7 @@ def main() -> int:
         model_name="mobilenet_v2_025_cifar10",
         target=ESP32_S3,
         backend_options=bakenn.CBackendOptions(
-            kernel_policy=bakenn.KernelPolicy.AUTO,
+            kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
             enable_esp_nn=True,
             target=ESP32_S3,
         ),

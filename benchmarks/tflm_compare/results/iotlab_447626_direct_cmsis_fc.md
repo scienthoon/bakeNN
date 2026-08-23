@@ -9,8 +9,9 @@ The [validated JSON](iotlab_447626_direct_cmsis_fc.json),
 [four-path CSV](iotlab_447626_direct_cmsis_fc.csv), and
 [raw UART transcript](iotlab_447626_direct_cmsis_fc_uart.txt) preserve the
 machine-readable result. This historical run used one input and a dirty
-BakeNN worktree; the exact linked ELFs are preserved by SHA-256, but the result
-must not be described as a clean `v0.1.0` multi-input measurement.
+BakeNN worktree. The exact linked ELF SHA-256 values were recorded, but the ELF
+bytes and original linker maps were not retained; the result must not be
+described as a clean `v0.1.0` multi-input measurement.
 
 ## Result
 

@@ -209,7 +209,7 @@ def generate(evidence_dir: Path, output: Path) -> dict[str, object]:
         name="mnist_physical",
         target=ESP32,
         backend_options=bakenn.CBackendOptions(
-            kernel_policy=bakenn.KernelPolicy.AUTO,
+            kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
             enable_esp_nn=True,
             target=ESP32,
         ),

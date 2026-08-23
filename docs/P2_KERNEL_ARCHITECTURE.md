@@ -28,7 +28,7 @@ The generated-C backend accepts `CBackendOptions`:
 
 ```python
 options = bakenn.CBackendOptions(
-    kernel_policy=bakenn.KernelPolicy.AUTO,
+    kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
     enable_weight_packing=True,
 )
 compiled = bakenn.compile(graph, "build/model", backend_options=options)
@@ -37,8 +37,12 @@ compiled = bakenn.compile(graph, "build/model", backend_options=options)
 The policies are:
 
 - `PORTABLE`: select only the portable baseline. This is the default.
-- `AUTO`: choose the highest-priority supported candidate, then use the stable
-  implementation ID as the deterministic tie-breaker.
+- `STATIC_PRIORITY`: choose the highest-priority supported candidate, then use
+  the stable implementation ID as the deterministic tie-breaker.
+- `MEASURED`: choose the lowest-cycle candidate only when an exact physical
+  cost entry matches workload, target, toolchain, and compiler flags;
+  otherwise choose portable C.
+- `AUTO`: deprecated compatibility spelling for `STATIC_PRIORITY`.
 - `REQUIRE_OPTIMIZED`: reject compilation if a step has no applicable
   optimized implementation.
 
@@ -49,8 +53,8 @@ constant overrides plus scratch size/alignment. Selection is performed once on t
 reason, rejected candidates and representation metadata are written to the
 manifest.
 
-Unsupported shapes never enter a specialized kernel. `AUTO` falls back to the
-portable implementation; `REQUIRE_OPTIMIZED` fails closed.
+Unsupported shapes never enter a specialized kernel. `STATIC_PRIORITY` falls
+back to the portable implementation; `REQUIRE_OPTIMIZED` fails closed.
 
 ## Fixed-point contract
 
@@ -121,7 +125,7 @@ two INT32 accumulators live and reuses each centered input value for both output
 channels. Accumulation order within each output channel is unchanged, so v1
 overflow proofs and byte-exact results remain valid. Small shapes, odd shapes
 without enough work, and disabled packing use the portable OI kernel under
-`AUTO`.
+`STATIC_PRIORITY`.
 
 The first convolution candidates are:
 
@@ -154,7 +158,7 @@ The MAC kernels pack two signed INT8 weights as two sign-extended INT16 lanes
 and invoke `__builtin_arm_smlad`. The general 3x3 kernel lowers one output
 pixel at a time into a statically planned scratch patch, then reuses the same
 Q31 helpers as every other backend. Unsupported groups, shapes, strides,
-dilations or targets take the declared `AUTO` fallback or exact
+dilations or targets take the declared `STATIC_PRIORITY` fallback or exact
 `REQUIRE_OPTIMIZED` error. Grouped Conv2D remains available through portable C;
 the Cortex-M4 convolution candidates currently require `groups=1` except for
 the dedicated depthwise case.
@@ -187,7 +191,7 @@ groups/depth multiplier, dilation, padding symmetry where required, channel
 alignment, zero points, per-channel multipliers/shifts, fused clamp and pooling
 rounding. `CONFIG_NN_SKIP_NUDGE` is forbidden because it would change the
 declared double-rounding result. Unsupported cases are portable fallback under
-`AUTO` and exact compile errors under `REQUIRE_OPTIMIZED`.
+`STATIC_PRIORITY` and exact compile errors under `REQUIRE_OPTIMIZED`.
 
 The original ESP32 optimized sources execute in the host differential suite.
 ESP32-S3's Xtensa assembly cannot execute on the host, so the wrappers are
@@ -245,4 +249,4 @@ The following are explicit next-phase limitations, not hidden fallbacks:
   initialization cycles, energy and ESP targets remain unmeasured.
 
 Until same-device evidence is added, portable remains the default and BakeNN
-must not claim that `AUTO` is universally faster.
+must not claim that static-priority selection is universally faster.

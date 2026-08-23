@@ -439,7 +439,7 @@ def build() -> Path:
     _add_heading(document, "4. INT8 수치 계약과 정확성")
     _add_table(
         document,
-        ("항목", "BakeNN 0.1.0 계약"),
+        ("항목", "BakeNN 1.0 계약"),
         (
             ("Activation", "per-tensor affine int8 [-128, 127]"),
             ("Weight", "output-channel별 symmetric int8 [-127, 127], zero point 0"),
@@ -454,7 +454,7 @@ def build() -> Path:
         document,
         "변환 후 Python 정수 실행기와 생성 C는 같은 고정소수점 계약을 사용한다. "
         "Q31 multiplier·shift는 호스트에서 한 번 계산해 상수로 내보내며 타겟에서 float로 재계산하지 않는다. "
-        "지원 범위를 벗어난 vendor kernel은 AUTO에서 portable로 fallback하고 REQUIRE_OPTIMIZED에서는 이유와 함께 실패한다.",
+        "지원 범위를 벗어난 vendor kernel은 STATIC_PRIORITY에서 portable로 fallback하고 REQUIRE_OPTIMIZED에서는 이유와 함께 실패한다.",
     )
 
     _add_heading(document, "5. 구현 범위")
@@ -695,8 +695,8 @@ def build() -> Path:
         document,
         ("현재 한계", "후속 작업"),
         (
-            ("ESP32-S3 물리 cycle·energy 미측정", "동일 모델 TFLM/ESP-NN 실보드 비교와 measured AUTO cost table"),
-            ("trained MNIST 물리 UART 미수집", "준비된 100장 corpus로 ESP32 flash·cycles·stack transcript 고정"),
+            ("ESP32-S3 물리 cycle·energy 미측정", "동일 모델 TFLM/ESP-NN 실보드 비교와 exact measured cost table"),
+            ("trained MNIST 실측은 original ESP32 1종", "같은 frozen corpus를 Cortex-M/ESP32-S3에도 확대 측정"),
             ("TFLM보다 좁은 operator surface", "시장별 fixture 기반으로 detection/postprocess 등 선택 확장"),
             ("PTQ만 구현, QAT fine-tuning 없음", "PTQ 정확도가 부족한 모델을 위한 별도 QAT frontend"),
             ("동적 shape·다중 공개 I/O 없음", "핵심 제품 계약은 유지하고 필요한 정적 multi-ABI를 별도 검토"),
@@ -716,8 +716,8 @@ def build() -> Path:
             ("시연 절차", "준비", "3분 demo script와 ESP32-S3 one-command generator"),
             ("시연영상 링크", "미완료", "화면 녹화·업로드 후 공식 양식과 본 문서에 링크 추가 필요"),
             ("외부 clean-room PR", "미완료", "제3자가 fresh clone에서 1-command verifier 실행 후 JSON PR"),
-            ("trained MNIST physical", "미완료", "ESP32 UART transcript와 cycles/stack 결과 체크인"),
-            ("최종 release/tag", "미완료", "green PR merge 후 main에서 v0.1.0 tag/release"),
+            ("trained MNIST physical", "완료", "original ESP32 UART, 101회 cycles, size와 100장 exact output 체크인"),
+            ("최종 release/tag", "미완료", "v1 hardening PR merge 후 main에서 v1.0.0 tag/release"),
         ),
         (2600, 1500, 5260),
         numeric_columns=(1,),

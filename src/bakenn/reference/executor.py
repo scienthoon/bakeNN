@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import singledispatch
+from types import MappingProxyType
 from typing import Mapping
 
 import numpy as np
@@ -96,9 +97,9 @@ def _execute_linear(
     return {step.output: result.reshape(plan.tensors[step.output].tensor_type.shape)}
 
 
-def run_reference(plan: ExecutionPlan, input_values: np.ndarray) -> np.ndarray:
-    """Execute a lowered plan with generic per-step integer dispatch."""
-
+def _run_reference_values(
+    plan: ExecutionPlan, input_values: np.ndarray
+) -> dict[str, np.ndarray]:
     input_name = plan.inputs[0]
     expected_shape = plan.tensors[input_name].tensor_type.shape
     input_array = np.asarray(input_values)
@@ -107,7 +108,7 @@ def run_reference(plan: ExecutionPlan, input_values: np.ndarray) -> np.ndarray:
     if input_array.shape != expected_shape:
         raise CompileError(f"integer reference input has shape {input_array.shape}, expected {expected_shape}")
 
-    values: dict[str, np.ndarray] = {input_name: input_array}
+    values: dict[str, np.ndarray] = {input_name: np.array(input_array, copy=True)}
     values.update(plan.constants)
     for step in plan.steps:
         produced = dict(execute_step(step, plan, values))
@@ -126,6 +127,30 @@ def run_reference(plan: ExecutionPlan, input_values: np.ndarray) -> np.ndarray:
                     f"reference executor for {step.name} produced invalid tensor {name}"
                 )
             values[name] = result
+    return values
+
+
+def run_reference_trace(
+    plan: ExecutionPlan, input_values: np.ndarray
+) -> Mapping[str, np.ndarray]:
+    """Execute a plan and return immutable snapshots of every runtime edge."""
+
+    values = _run_reference_values(plan, input_values)
+    runtime_names = {plan.inputs[0]}
+    for step in plan.steps:
+        runtime_names.update(step.outputs)
+    snapshots: dict[str, np.ndarray] = {}
+    for name in sorted(runtime_names):
+        value = np.array(values[name], copy=True, order="C")
+        value.setflags(write=False)
+        snapshots[name] = value
+    return MappingProxyType(snapshots)
+
+
+def run_reference(plan: ExecutionPlan, input_values: np.ndarray) -> np.ndarray:
+    """Execute a lowered plan with generic per-step integer dispatch."""
+
+    values = _run_reference_values(plan, input_values)
     return np.array(values[plan.outputs[0]], copy=True)
 
 
@@ -133,4 +158,10 @@ def run_reference(plan: ExecutionPlan, input_values: np.ndarray) -> np.ndarray:
 from . import kernels as _built_in_kernels  # noqa: E402,F401
 
 
-__all__ = ["dequantize_output", "execute_step", "quantize_input", "run_reference"]
+__all__ = [
+    "dequantize_output",
+    "execute_step",
+    "quantize_input",
+    "run_reference",
+    "run_reference_trace",
+]

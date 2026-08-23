@@ -85,7 +85,7 @@ def test_memory_report_uses_selected_backend_scratch_and_marks_measurement_bound
         tiny_cnn_graph(),
         tmp_path / "cortex_m4",
         backend_options=bakenn.CBackendOptions(
-            kernel_policy=bakenn.KernelPolicy.AUTO,
+            kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
             target=target,
         ),
     )

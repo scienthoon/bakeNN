@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import bakenn
+from bakenn.artifacts import load_manifest
 from bakenn.errors import CompileError
 
 
@@ -48,6 +49,7 @@ def test_zephyr_project_is_self_contained_and_records_measurement_contract(
     assert (project.root / "CMakeLists.txt").is_file()
     assert (project.root / "prj.conf").is_file()
     assert (project.generated / compiled.artifacts.header.name).is_file()
+    load_manifest(project.generated / compiled.artifacts.manifest.name)
     main = (project.source / "main.c").read_text(encoding="utf-8")
     assert "timing_cycles_get" in main
     assert "__has_include(<zephyr/kernel.h>)" in main
@@ -56,6 +58,11 @@ def test_zephyr_project_is_self_contained_and_records_measurement_contract(
     assert "BAKENN_OUTPUT" in main
     assert "BAKENN_BENCHMARK_RUNS 101u" in main
     assert "INPUT_ZERO_POINT" in main
+    assert (
+        f"BAKENN target=cortex-m4 board={board} "
+        f"iotlab_architecture={iotlab_architecture}"
+    ) in main
+    assert "target=nrf52840dk" not in main
     metadata = json.loads((project.root / "bakenn_target.json").read_text())
     assert metadata["zephyr_board"] == board
     assert metadata["iotlab_architecture"] == iotlab_architecture

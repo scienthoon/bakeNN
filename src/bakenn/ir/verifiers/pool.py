@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from bakenn.errors import GraphValidationError
 from bakenn.ir.graph import QuantizedGraph
-from bakenn.ir.ops.pool import AveragePool2DOp, MaxPool2DOp
+from bakenn.ir.ops.pool import (
+    AVERAGE_POOL_PROFILE_BAKENN_V1,
+    AVERAGE_POOL_PROFILES,
+    AveragePool2DOp,
+    MaxPool2DOp,
+)
 from bakenn.ir.types import DType, Layout, PerTensorQParams, TARGET_SIZE_MAX
 from bakenn.ir.verify import verify_op
 from bakenn.quantization.fixedpoint import INT32_MAX
@@ -73,13 +78,18 @@ def _verify_pool(op: AveragePool2DOp | MaxPool2DOp, graph: QuantizedGraph) -> No
         _fail(op, "every pooling window must contain at least one input element")
 
     if isinstance(op, AveragePool2DOp):
-        max_abs_centered = max(
-            abs(-128 - input_type.qparams.zero_point),
-            abs(127 - input_type.qparams.zero_point),
-        )
-        bound = max_abs_centered * kernel_h * kernel_w
+        if op.arithmetic_profile not in AVERAGE_POOL_PROFILES:
+            _fail(op, f"unsupported arithmetic profile {op.arithmetic_profile}")
+        if op.arithmetic_profile == AVERAGE_POOL_PROFILE_BAKENN_V1:
+            max_abs_value = max(
+                abs(-128 - input_type.qparams.zero_point),
+                abs(127 - input_type.qparams.zero_point),
+            )
+        else:
+            max_abs_value = 128
+        bound = max_abs_value * kernel_h * kernel_w
         if bound > INT32_MAX:
-            _fail(op, f"centered average accumulator bound {bound} exceeds int32")
+            _fail(op, f"average accumulator bound {bound} exceeds int32")
 
 
 @verify_op.register

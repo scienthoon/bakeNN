@@ -1,12 +1,28 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from enum import Enum
+import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
+import uuid
 
 import numpy as np
 
 from bakenn._version import VERSION
+from bakenn.artifacts import (
+    ARITHMETIC_PROFILE_VERSION,
+    GENERATED_C_ABI_VERSION,
+    MANIFEST_SCHEMA_VERSION,
+    build_artifact_inventory,
+    canonical_plan_fingerprints,
+    compiler_source_identity,
+    load_manifest,
+    manifest_payload_sha256,
+    validate_manifest,
+)
 from bakenn.backend.cmsis_nn import bundle_kernels
 from bakenn.backend.cmsis_nn.bundle import (
     CMSIS_CORE_VERSION,
@@ -73,10 +89,84 @@ def _include_lines(includes: tuple[str, ...] | list[str]) -> str:
     return "\n".join(f"#include {value}" for value in dict.fromkeys(includes))
 
 
-def generate_portable_c(
+def _manifest_extension_value(value: object, *, field_name: str) -> object:
+    """Convert optional selection provenance without coupling to its type."""
+
+    manifest_method = getattr(value, "manifest", None)
+    if callable(manifest_method):
+        return _manifest_extension_value(manifest_method(), field_name=field_name)
+    if isinstance(value, Enum):
+        return _manifest_extension_value(value.value, field_name=field_name)
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, dict):
+        if any(not isinstance(key, str) for key in value):
+            raise CompileError(f"{field_name} manifest mapping keys must be strings")
+        return {
+            key: _manifest_extension_value(item, field_name=field_name)
+            for key, item in sorted(value.items())
+        }
+    if isinstance(value, (tuple, list)):
+        return [
+            _manifest_extension_value(item, field_name=field_name) for item in value
+        ]
+    raise CompileError(
+        f"{field_name} cannot be represented in generated manifest: "
+        f"{type(value).__name__}"
+    )
+
+
+def _selection_manifest(
+    selection: object,
+    *,
+    packed_symbols: dict[str, str],
+) -> dict[str, object]:
+    record: dict[str, object] = {
+        "step_index": selection.step_index,
+        "step_name": selection.step_name,
+        "implementation": selection.kernel_id,
+        "optimized": selection.optimized,
+        "selection_reason": selection.reason,
+        "packed_constants": [
+            {
+                "name": item.name,
+                "source": item.source,
+                "symbol": packed_symbols[item.name],
+                "layout": item.layout,
+                "alignment": item.alignment,
+                "bytes": int(item.value.nbytes),
+            }
+            for item in selection.packed_constants
+        ],
+        "rejected_implementations": dict(selection.rejected),
+        "scratch_bytes": selection.scratch_size,
+        "scratch_alignment": selection.scratch_alignment,
+    }
+    selection_basis = getattr(selection, "selection_basis", None)
+    if selection_basis is not None:
+        record["selection_basis"] = _manifest_extension_value(
+            selection_basis, field_name="selection_basis"
+        )
+    workload_key = getattr(selection, "workload_key", None)
+    if workload_key:
+        record["workload_key"] = _manifest_extension_value(
+            workload_key, field_name="workload_key"
+        )
+    matched_measurement = getattr(selection, "matched_measurement", None)
+    if matched_measurement is None:
+        matched_measurement = getattr(selection, "matched_cost", None)
+    if matched_measurement is not None:
+        record["matched_measurement"] = _manifest_extension_value(
+            matched_measurement, field_name="matched_measurement"
+        )
+    return record
+
+
+def _generate_portable_c_into(
     plan: ExecutionPlan,
     output_dir: str | Path,
     *,
+    compiler_identity: dict[str, object],
     model_name: str | None = None,
     options: CBackendOptions | None = None,
 ) -> CompilationArtifacts:
@@ -146,12 +236,51 @@ def generate_portable_c(
 
 #include <stdint.h>
 
+#ifndef BKNN_C_ABI_VERSION
+#define BKNN_C_ABI_VERSION {GENERATED_C_ABI_VERSION}u
+#endif
+#ifndef BKNN_MANIFEST_SCHEMA_VERSION
+#define BKNN_MANIFEST_SCHEMA_VERSION {MANIFEST_SCHEMA_VERSION}u
+#endif
+#ifndef BKNN_ARITHMETIC_PROFILE_VERSION
+#define BKNN_ARITHMETIC_PROFILE_VERSION {ARITHMETIC_PROFILE_VERSION}u
+#endif
+#ifndef BKNN_ARITHMETIC_PROFILE_ID
+#define BKNN_ARITHMETIC_PROFILE_ID "{plan.arithmetic_profile}"
+#endif
+
+#ifndef BKNN_RESTRICT
+#if defined(_MSC_VER)
+#define BKNN_RESTRICT __restrict
+#elif defined(__cplusplus)
+#if defined(__GNUC__) || defined(__clang__)
+#define BKNN_RESTRICT __restrict__
+#else
+#define BKNN_RESTRICT
+#endif
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
+#define BKNN_RESTRICT restrict
+#elif defined(__GNUC__) || defined(__clang__)
+#define BKNN_RESTRICT __restrict__
+#else
+#define BKNN_RESTRICT
+#endif
+#endif
+
 #ifndef BKNN_LAYOUT_NHWC
 #define BKNN_LAYOUT_NHWC 1u
 #endif
 #ifndef BKNN_LAYOUT_NC
 #define BKNN_LAYOUT_NC 2u
 #endif
+#ifndef BKNN_LAYOUT_NLC
+#define BKNN_LAYOUT_NLC 3u
+#endif
+
+#define {macro}_C_ABI_VERSION BKNN_C_ABI_VERSION
+#define {macro}_MANIFEST_SCHEMA_VERSION BKNN_MANIFEST_SCHEMA_VERSION
+#define {macro}_ARITHMETIC_PROFILE_VERSION BKNN_ARITHMETIC_PROFILE_VERSION
+#define {macro}_ARITHMETIC_PROFILE_ID BKNN_ARITHMETIC_PROFILE_ID
 
 #define {macro}_INPUT_SIZE {input_type.numel}u
 #define {macro}_INPUT_BYTES {input_type.nbytes}u
@@ -170,11 +299,24 @@ def generate_portable_c(
 #define {macro}_OUTPUT_SCALE {c_float(output_qparams.scale)}
 #define {macro}_OUTPUT_ZERO_POINT {output_qparams.zero_point}
 
-/* input, output, and arena must not overlap. arena may be NULL when ARENA_SIZE is zero. */
+/* Public inference ABI contract:
+ * - input points to at least {macro}_INPUT_BYTES readable bytes.
+ * - output points to at least {macro}_OUTPUT_BYTES writable bytes.
+ * - arena is NULL exactly when {macro}_ARENA_SIZE is zero; otherwise it points
+ *   to at least {macro}_ARENA_SIZE writable bytes and its address is aligned to
+ *   {macro}_ARENA_ALIGNMENT bytes.
+ * - the input, output, and non-empty arena byte ranges are pairwise non-overlapping.
+ */
+#ifdef __cplusplus
+extern "C" {{
+#endif
 void {symbol}_infer(
-    uint8_t *restrict arena,
-    const int8_t *restrict input,
-    int8_t *restrict output);
+    uint8_t *BKNN_RESTRICT arena,
+    const int8_t *BKNN_RESTRICT input,
+    int8_t *BKNN_RESTRICT output);
+#ifdef __cplusplus
+}}
+#endif
 
 #endif
 """,
@@ -309,9 +451,9 @@ void {symbol}_infer(
     model_source.write_text(
         f'#include "{header_name}"\n#include "{kernels_header_name}"\n#include "{weights_header_name}"\n\n'
         f"void {symbol}_infer(\n"
-        f"    uint8_t *restrict arena,\n"
-        f"    const int8_t *restrict input,\n"
-        f"    int8_t *restrict output) {{\n"
+        f"    uint8_t *BKNN_RESTRICT arena,\n"
+        f"    const int8_t *BKNN_RESTRICT input,\n"
+        f"    int8_t *BKNN_RESTRICT output) {{\n"
         + "    (void)arena;\n"
         + "\n\n".join(emission.call for emission in step_emissions)
         + "\n}\n",
@@ -319,37 +461,20 @@ void {symbol}_infer(
     )
 
     operations = [dict(emission.manifest) for emission in step_emissions]
-    kernel_selections = []
-    for selection in backend_plan.selections:
-        kernel_selections.append(
-            {
-                "step_index": selection.step_index,
-                "step_name": selection.step_name,
-                "implementation": selection.kernel_id,
-                "optimized": selection.optimized,
-                "selection_reason": selection.reason,
-                "packed_constants": [
-                    {
-                        "name": item.name,
-                        "source": item.source,
-                        "symbol": packed_symbols[item.name],
-                        "layout": item.layout,
-                        "alignment": item.alignment,
-                        "bytes": int(item.value.nbytes),
-                    }
-                    for item in selection.packed_constants
-                ],
-                "rejected_implementations": dict(selection.rejected),
-                "scratch_bytes": selection.scratch_size,
-                "scratch_alignment": selection.scratch_alignment,
-            }
-        )
+    kernel_selections = [
+        _selection_manifest(selection, packed_symbols=packed_symbols)
+        for selection in backend_plan.selections
+    ]
 
     manifest_data = {
-        "schema_version": 3,
+        "schema_version": MANIFEST_SCHEMA_VERSION,
+        "c_abi_version": GENERATED_C_ABI_VERSION,
         "compiler_version": VERSION,
+        "compiler": dict(compiler_identity),
         "model": symbol,
         "arithmetic_profile": plan.arithmetic_profile,
+        "arithmetic_profile_version": ARITHMETIC_PROFILE_VERSION,
+        "graph_fingerprints": canonical_plan_fingerprints(plan),
         "backend": {
             "name": "c11",
             "target": backend_plan.options.target.manifest(),
@@ -444,7 +569,6 @@ void {symbol}_infer(
         )
     if bundled_dependencies:
         manifest_data["bundled_dependencies"] = bundled_dependencies
-    manifest.write_text(json.dumps(manifest_data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     support_sources = (
         (() if cmsis_bundle is None else cmsis_bundle.sources)
@@ -494,6 +618,24 @@ void {symbol}_infer(
         encoding="utf-8",
     )
 
+    # The manifest is committed last. Its raw file digest is excluded from the
+    # artifact inventory to avoid recursion; a canonical payload digest below
+    # binds every manifest field except that digest's own storage field.
+    manifest_data["artifact_inventory"] = build_artifact_inventory(
+        output,
+        manifest_path=manifest.name,
+    )
+    manifest_data["manifest_payload_hash_domain"] = "bakenn.manifest-payload.v1"
+    manifest_data["manifest_payload_sha256"] = manifest_payload_sha256(
+        manifest_data
+    )
+    validate_manifest(manifest_data, verify_files=False)
+    manifest.write_text(
+        json.dumps(manifest_data, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    load_manifest(manifest)
+
     return CompilationArtifacts(
         output_dir=output,
         header=header,
@@ -512,6 +654,173 @@ void {symbol}_infer(
         support_include_dirs=support_include_dirs,
         third_party_licenses=third_party_licenses,
     )
+
+
+@dataclass(frozen=True)
+class _OutputState:
+    kind: str
+    token: str | None = None
+
+
+def _classify_output(output: Path) -> _OutputState:
+    """Permit only absent, empty, or fully verified BakeNN-owned outputs."""
+
+    if output.is_symlink():
+        raise CompileError(f"output directory must not be a symlink: {output}")
+    if not output.exists():
+        return _OutputState("absent")
+    if not output.is_dir():
+        raise CompileError(f"output path exists and is not a directory: {output}")
+    try:
+        entries = tuple(output.iterdir())
+    except OSError as error:
+        raise CompileError(f"cannot inspect output directory {output}: {error}") from error
+    if not entries:
+        return _OutputState("empty")
+    manifests = tuple(output.glob("bknn_*_manifest.json"))
+    if len(manifests) != 1:
+        raise CompileError(
+            f"refusing to replace non-empty unmanaged output directory {output}; "
+            "use an empty directory or an intact BakeNN schema-v4 artifact directory"
+        )
+    try:
+        load_manifest(manifests[0])
+    except CompileError as error:
+        raise CompileError(
+            f"refusing to replace non-empty output directory {output}: {error}"
+        ) from error
+    return _OutputState("managed", hashlib.sha256(manifests[0].read_bytes()).hexdigest())
+
+
+def _rebase_path(path: Path, source: Path, destination: Path) -> Path:
+    return destination / path.relative_to(source)
+
+
+def _rebase_artifacts(
+    artifacts: CompilationArtifacts,
+    source: Path,
+    destination: Path,
+) -> CompilationArtifacts:
+    return replace(
+        artifacts,
+        output_dir=destination,
+        header=_rebase_path(artifacts.header, source, destination),
+        model_source=_rebase_path(artifacts.model_source, source, destination),
+        weights_header=_rebase_path(artifacts.weights_header, source, destination),
+        weights_source=_rebase_path(artifacts.weights_source, source, destination),
+        kernels_header=_rebase_path(artifacts.kernels_header, source, destination),
+        kernels_source=_rebase_path(artifacts.kernels_source, source, destination),
+        manifest=_rebase_path(artifacts.manifest, source, destination),
+        memory_report_json=_rebase_path(
+            artifacts.memory_report_json, source, destination
+        ),
+        memory_report_text=_rebase_path(
+            artifacts.memory_report_text, source, destination
+        ),
+        build_fragment=_rebase_path(artifacts.build_fragment, source, destination),
+        support_sources=tuple(
+            _rebase_path(path, source, destination)
+            for path in artifacts.support_sources
+        ),
+        support_include_dirs=tuple(
+            _rebase_path(path, source, destination)
+            for path in artifacts.support_include_dirs
+        ),
+        third_party_licenses=tuple(
+            _rebase_path(path, source, destination)
+            for path in artifacts.third_party_licenses
+        ),
+    )
+
+
+def generate_portable_c(
+    plan: ExecutionPlan,
+    output_dir: str | Path,
+    *,
+    model_name: str | None = None,
+    options: CBackendOptions | None = None,
+) -> CompilationArtifacts:
+    """Generate and atomically publish one complete artifact closure.
+
+    A non-empty destination is replaceable only when its strict schema-v4
+    manifest proves that every entry belongs to a previous BakeNN generation.
+    All validation and emission happen in a sibling staging directory; failures
+    leave an existing output byte-for-byte unchanged.
+    """
+
+    # Capture provenance before creating the output parent or staging tree.
+    # Otherwise an artifact path inside the source repository can make the
+    # compiler observe its own temporary files and falsely mark a clean source
+    # checkout as dirty.
+    source_identity = compiler_source_identity(VERSION)
+    output = Path(output_dir)
+    initial_state = _classify_output(output)
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise CompileError(f"cannot create output parent {output.parent}: {error}") from error
+    staging = output.parent / (
+        f".{output.name}.bakenn-staging-{uuid.uuid4().hex}"
+    )
+    backup = output.parent / (
+        f".{output.name}.bakenn-backup-{uuid.uuid4().hex}"
+    )
+    staged_artifacts: CompilationArtifacts | None = None
+    try:
+        staged_artifacts = _generate_portable_c_into(
+            plan,
+            staging,
+            compiler_identity=source_identity,
+            model_name=model_name,
+            options=options,
+        )
+        published_artifacts = _rebase_artifacts(staged_artifacts, staging, output)
+        if _classify_output(output) != initial_state:
+            raise CompileError(
+                f"output directory changed concurrently during generation: {output}"
+            )
+
+        if initial_state.kind == "absent":
+            os.replace(staging, output)
+        elif initial_state.kind == "empty":
+            output.rmdir()
+            try:
+                os.replace(staging, output)
+            except BaseException:
+                output.mkdir(exist_ok=True)
+                raise
+        else:
+            os.replace(output, backup)
+            try:
+                os.replace(staging, output)
+            except BaseException:
+                os.replace(backup, output)
+                raise
+            try:
+                # The new closure is committed once the two renames above
+                # succeed.  Deleting the old tree is cleanup, not part of the
+                # transaction: rmtree can fail after removing only part of a
+                # directory, so that partially destroyed backup must never be
+                # restored over the valid newly published artifact.
+                shutil.rmtree(backup, ignore_errors=True)
+            except OSError:
+                # A valid output is more important than removing a stale,
+                # uniquely named backup.  A later invocation never treats the
+                # sibling backup as part of the managed output closure.
+                pass
+        return published_artifacts
+    except CompileError:
+        if staging.exists() and not staging.is_symlink():
+            shutil.rmtree(staging, ignore_errors=True)
+        raise
+    except (OSError, ValueError) as error:
+        if staging.exists() and not staging.is_symlink():
+            shutil.rmtree(staging, ignore_errors=True)
+        raise CompileError(f"failed to publish generated artifacts: {error}") from error
+    except BaseException:
+        if staging.exists() and not staging.is_symlink():
+            shutil.rmtree(staging, ignore_errors=True)
+        raise
 
 
 __all__ = ["CompilationArtifacts", "generate_portable_c"]

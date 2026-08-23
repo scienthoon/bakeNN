@@ -1,23 +1,28 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from functools import singledispatch
+import json
 from types import MappingProxyType
 from typing import Mapping
+import warnings
 
 import numpy as np
 
 from bakenn.errors import CompileError
-from bakenn.ir.types import TARGET_SIZE_MAX
+from bakenn.ir.types import PerAxisQParams, PerTensorQParams, TARGET_SIZE_MAX
 from bakenn.plan import ExecutionPlan, ExecutionStep
-from bakenn.targets import PORTABLE_32, TargetDescriptor
+from bakenn.targets import KernelCostMeasurement, PORTABLE_32, TargetDescriptor
 
 
 class KernelPolicy(str, Enum):
     """How the C backend chooses among semantically equivalent kernels."""
 
     PORTABLE = "portable"
+    STATIC_PRIORITY = "static_priority"
+    MEASURED = "measured"
+    # Deprecated compatibility spelling for the pre-1.0 static-priority mode.
     AUTO = "auto"
     REQUIRE_OPTIMIZED = "require_optimized"
 
@@ -27,8 +32,10 @@ class CBackendOptions:
     """Host-side C lowering policy.
 
     Portable remains the default until a target-specific benchmark validates a
-    specialized implementation. AUTO is deterministic and may select an
-    optimized implementation when every declared capability predicate holds.
+    specialized implementation. ``STATIC_PRIORITY`` is the explicit opt-in to
+    deterministic capability-priority selection.  ``AUTO`` retains that same
+    behavior only as a deprecated compatibility spelling.  ``MEASURED`` uses
+    exact physical-cost entries and otherwise falls back to portable C.
     """
 
     kernel_policy: KernelPolicy = KernelPolicy.PORTABLE
@@ -40,6 +47,14 @@ class CBackendOptions:
     def __post_init__(self) -> None:
         if not isinstance(self.kernel_policy, KernelPolicy):
             raise ValueError("kernel_policy must use KernelPolicy")
+        if self.kernel_policy is KernelPolicy.AUTO:
+            warnings.warn(
+                "KernelPolicy.AUTO is deprecated because it means static priority, "
+                "not measured fastest; use KernelPolicy.STATIC_PRIORITY or "
+                "KernelPolicy.MEASURED",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         if not isinstance(self.enable_weight_packing, bool):
             raise ValueError("enable_weight_packing must be boolean")
         if not isinstance(self.enable_cmsis_nn, bool):
@@ -170,6 +185,159 @@ class KernelCapability:
         object.__setattr__(self, "constant_overrides", MappingProxyType(overrides))
 
 
+_WORKLOAD_KEY_VERSION = "bakenn.workload.v1"
+_WORKLOAD_PARAMETER_FIELDS = frozenset(
+    {
+        "activation_max",
+        "activation_min",
+        "align_corners",
+        "axis",
+        "axis_sizes",
+        "channels",
+        "class_count",
+        "depth_multiplier",
+        "dilation",
+        "groups",
+        "inner_size",
+        "inplace",
+        "input_axis_size",
+        "kernel",
+        "materialize",
+        "operation",
+        "outer_size",
+        "output_axis_size",
+        "output_padding",
+        "padding",
+        "position_count",
+        "row_count",
+        "start",
+        "step",
+        "stride",
+    }
+)
+
+
+def _canonical_value(value: object) -> object:
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, tuple):
+        return [_canonical_value(item) for item in value]
+    if isinstance(value, list):
+        return [_canonical_value(item) for item in value]
+    if isinstance(value, np.integer):
+        return int(value)
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    raise TypeError(f"unsupported canonical workload value {type(value).__name__}")
+
+
+def _zero_point_profile(values: tuple[int, ...]) -> str:
+    if all(value == 0 for value in values):
+        return "symmetric_zero"
+    if all(value == values[0] for value in values):
+        return "uniform_nonzero"
+    return "per_axis_nonzero"
+
+
+def _tensor_workload_descriptor(plan: ExecutionPlan, name: str) -> dict[str, object]:
+    tensor = plan.tensors[name]
+    tensor_type = tensor.tensor_type
+    qparams = tensor_type.qparams
+    if isinstance(qparams, PerTensorQParams):
+        qparam_profile: dict[str, object] = {
+            "granularity": "per_tensor",
+            "zero_point_profile": (
+                "symmetric_zero" if qparams.zero_point == 0 else "asymmetric_nonzero"
+            ),
+        }
+    elif isinstance(qparams, PerAxisQParams):
+        qparam_profile = {
+            "granularity": "per_axis",
+            "axis": qparams.axis,
+            "count": len(qparams.scales),
+            "zero_point_profile": _zero_point_profile(qparams.zero_points),
+        }
+    else:  # pragma: no cover - TensorType validation keeps this fail-closed.
+        raise TypeError(f"unsupported qparams type {type(qparams).__name__}")
+    return {
+        "shape": list(tensor_type.shape),
+        "dtype": tensor_type.dtype.value,
+        "layout": tensor_type.layout.value,
+        "qparams": qparam_profile,
+        "memory": {
+            "storage": tensor.storage.value,
+            "bytes": tensor_type.nbytes,
+        },
+    }
+
+
+def _requantization_profile(step: ExecutionStep) -> dict[str, object]:
+    shift_values: list[int] = []
+    multiplier_count = 0
+    for item in fields(step):
+        value = getattr(step, item.name)
+        if item.name == "multipliers":
+            multiplier_count += len(value)
+        elif item.name == "multiplier" or item.name.endswith("_multiplier"):
+            multiplier_count += 1
+        if item.name == "shifts":
+            shift_values.extend(int(shift) for shift in value)
+        elif item.name == "shift" or item.name.endswith("_shift"):
+            shift_values.append(int(value))
+    return {
+        "multiplier_count": multiplier_count,
+        "shift_count": len(shift_values),
+        "negative_shifts": sum(value < 0 for value in shift_values),
+        "zero_shifts": sum(value == 0 for value in shift_values),
+        "positive_shifts": sum(value > 0 for value in shift_values),
+    }
+
+
+def canonical_workload_key(plan: ExecutionPlan, step: ExecutionStep) -> str:
+    """Return the versioned exact key used by physical kernel-cost entries.
+
+    Model and tensor names are deliberately excluded.  The key captures the op
+    kind, arithmetic/qparam profile, relevant static parameters, tensor shapes
+    and layouts, and physical storage classes.  Canonical JSON keeps the entry
+    both deterministic and reviewable in target manifests.
+    """
+
+    if not isinstance(plan, ExecutionPlan):
+        raise TypeError("canonical workload keys require an ExecutionPlan")
+    if not isinstance(step, ExecutionStep):
+        raise TypeError("canonical workload keys require an ExecutionStep")
+    parameters = {
+        item.name: _canonical_value(getattr(step, item.name))
+        for item in fields(step)
+        if item.name in _WORKLOAD_PARAMETER_FIELDS
+    }
+    payload = {
+        "op": step.kernel_kind,
+        "arithmetic_profile": step.arithmetic_profile,
+        "inputs": [
+            _tensor_workload_descriptor(plan, name) for name in step.inputs
+        ],
+        "outputs": [
+            _tensor_workload_descriptor(plan, name) for name in step.outputs
+        ],
+        "constants": [
+            _tensor_workload_descriptor(plan, name) for name in step.constants
+        ],
+        "parameters": parameters,
+        "requantization": _requantization_profile(step),
+        "memory": {
+            "step_scratch_bytes": step.scratch_size,
+            "step_scratch_alignment": step.scratch_alignment,
+        },
+    }
+    return _WORKLOAD_KEY_VERSION + ":" + json.dumps(
+        payload,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
 @dataclass(frozen=True)
 class KernelSelection:
     step_index: int
@@ -182,6 +350,9 @@ class KernelSelection:
     packed_constants: tuple[PackedConstant, ...] = ()
     scratch_size: int = 0
     scratch_alignment: int = 1
+    selection_basis: str = "manual"
+    workload_key: str = ""
+    matched_cost: KernelCostMeasurement | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -198,6 +369,25 @@ class KernelSelection:
             raise ValueError("kernel selection is incomplete")
         if not isinstance(self.optimized, bool):
             raise ValueError("kernel selection optimized flag must be boolean")
+        if not isinstance(self.selection_basis, str) or not self.selection_basis:
+            raise ValueError("kernel selection basis must be a non-empty string")
+        if not isinstance(self.workload_key, str):
+            raise ValueError("kernel selection workload key must be a string")
+        if self.workload_key and not self.workload_key.startswith(
+            _WORKLOAD_KEY_VERSION + ":"
+        ):
+            raise ValueError("kernel selection workload key uses an unknown version")
+        if self.matched_cost is not None:
+            if not isinstance(self.matched_cost, KernelCostMeasurement):
+                raise ValueError(
+                    "kernel selection matched cost must use KernelCostMeasurement"
+                )
+            if self.matched_cost.kernel_id != self.kernel_id:
+                raise ValueError("matched cost kernel id must match the selected kernel")
+            if self.matched_cost.workload != self.workload_key:
+                raise ValueError("matched cost workload must match the selection key")
+            if not self.selection_basis.startswith("measured"):
+                raise ValueError("matched costs require a measured selection basis")
         if (
             isinstance(self.scratch_size, bool)
             or not isinstance(self.scratch_size, int)
@@ -374,11 +564,43 @@ def kernel_capabilities(
     return (_portable_capability(step),)
 
 
+@dataclass(frozen=True)
+class _KernelDecision:
+    capability: KernelCapability
+    selection_basis: str
+    reason: str
+    matched_cost: KernelCostMeasurement | None = None
+
+
+def _exact_measured_costs(
+    capabilities: tuple[KernelCapability, ...],
+    workload_key: str,
+    options: CBackendOptions,
+) -> dict[str, KernelCostMeasurement]:
+    """Return only cost entries matching kernel, workload, toolchain and flags."""
+
+    target = options.target
+    if target.toolchain is None:
+        return {}
+    supported_ids = {
+        capability.kernel_id for capability in capabilities if capability.supported
+    }
+    return {
+        measurement.kernel_id: measurement
+        for measurement in target.measured_costs
+        if measurement.kernel_id in supported_ids
+        and measurement.workload == workload_key
+        and measurement.toolchain == target.toolchain
+        and measurement.compiler_flags == target.compiler_flags
+    }
+
+
 def _choose(
     step: ExecutionStep,
     capabilities: tuple[KernelCapability, ...],
     options: CBackendOptions,
-) -> KernelCapability:
+    workload_key: str,
+) -> _KernelDecision:
     if not capabilities:
         raise CompileError(f"{step.name}: no C kernel candidates were registered")
     identifiers = [item.kernel_id for item in capabilities]
@@ -389,6 +611,36 @@ def _choose(
         supported = [item for item in supported if not item.optimized]
     elif options.kernel_policy is KernelPolicy.REQUIRE_OPTIMIZED:
         supported = [item for item in supported if item.optimized]
+    elif options.kernel_policy is KernelPolicy.MEASURED:
+        exact_costs = _exact_measured_costs(capabilities, workload_key, options)
+        measured = [
+            (item, exact_costs[item.kernel_id])
+            for item in supported
+            if item.kernel_id in exact_costs
+        ]
+        if measured:
+            chosen, cost = sorted(
+                measured,
+                key=lambda item: (
+                    item[1].cycles,
+                    item[0].optimized,
+                    -item[0].priority,
+                    item[0].kernel_id,
+                ),
+            )[0]
+            flags = ",".join(cost.compiler_flags)
+            return _KernelDecision(
+                capability=chosen,
+                selection_basis="measured_latency",
+                reason=(
+                    f"{chosen.reason}; selected by exact measured latency "
+                    f"({cost.cycles} cycles, toolchain={cost.toolchain}, "
+                    f"flags=[{flags}], evidence={cost.evidence}, "
+                    f"workload={workload_key})"
+                ),
+                matched_cost=cost,
+            )
+        supported = [item for item in supported if not item.optimized]
     if not supported:
         rejected = "; ".join(
             f"{item.kernel_id}: {item.reason}" for item in capabilities if not item.supported
@@ -398,7 +650,28 @@ def _choose(
             f"{step.name}: kernel policy {policy} has no supported implementation"
             + (f" ({rejected})" if rejected else "")
         )
-    return sorted(supported, key=lambda item: (-item.priority, item.kernel_id))[0]
+    chosen = sorted(supported, key=lambda item: (-item.priority, item.kernel_id))[0]
+    if options.kernel_policy is KernelPolicy.MEASURED:
+        return _KernelDecision(
+            capability=chosen,
+            selection_basis="measured_portable_fallback",
+            reason=(
+                f"{chosen.reason}; no exact measured latency cost matched the "
+                f"canonical workload, target toolchain and compiler flags, so the "
+                f"selector used portable C (workload={workload_key})"
+            ),
+        )
+    if options.kernel_policy is KernelPolicy.PORTABLE:
+        basis = "portable_policy"
+    elif options.kernel_policy is KernelPolicy.REQUIRE_OPTIMIZED:
+        basis = "require_optimized"
+    else:
+        basis = "static_priority"
+    return _KernelDecision(
+        capability=chosen,
+        selection_basis=basis,
+        reason=chosen.reason,
+    )
 
 
 def select_backend_plan(
@@ -417,7 +690,12 @@ def select_backend_plan(
     packed: dict[str, PackedConstant] = {}
     for index, step in enumerate(plan.steps):
         capabilities = tuple(kernel_capabilities(step, plan, resolved_options))
-        chosen = _choose(step, capabilities, resolved_options)
+        workload_key = canonical_workload_key(plan, step)
+        decision = _choose(step, capabilities, resolved_options, workload_key)
+        chosen = decision.capability
+        measured_costs = _exact_measured_costs(
+            capabilities, workload_key, resolved_options
+        )
         rejected: dict[str, str] = {}
         for item in capabilities:
             if item.kernel_id == chosen.kernel_id:
@@ -431,6 +709,20 @@ def select_backend_plan(
                 and not item.optimized
             ):
                 rejected[item.kernel_id] = "excluded by require_optimized kernel policy"
+            elif resolved_options.kernel_policy is KernelPolicy.MEASURED:
+                measured_cost = measured_costs.get(item.kernel_id)
+                if measured_cost is None:
+                    rejected[item.kernel_id] = (
+                        "no exact measured latency cost matches the canonical workload, "
+                        "target toolchain and compiler flags"
+                    )
+                elif decision.matched_cost is not None:
+                    rejected[item.kernel_id] = (
+                        f"measured latency {measured_cost.cycles} cycles did not beat "
+                        f"{chosen.kernel_id} at {decision.matched_cost.cycles} cycles"
+                    )
+                else:  # pragma: no cover - a match always produces a measured decision.
+                    rejected[item.kernel_id] = "not selected by measured latency policy"
             else:
                 rejected[item.kernel_id] = (
                     f"lower selection priority than {chosen.kernel_id}"
@@ -469,12 +761,15 @@ def select_backend_plan(
                 step_name=step.name,
                 kernel_id=chosen.kernel_id,
                 optimized=chosen.optimized,
-                reason=chosen.reason,
+                reason=decision.reason,
                 rejected=rejected,
                 constant_overrides=chosen.constant_overrides,
                 packed_constants=chosen.packed_constants,
                 scratch_size=chosen.scratch_size,
                 scratch_alignment=chosen.scratch_alignment,
+                selection_basis=decision.selection_basis,
+                workload_key=workload_key,
+                matched_cost=decision.matched_cost,
             )
         )
     return CBackendPlan(plan, resolved_options, tuple(selections), packed)
@@ -487,6 +782,7 @@ __all__ = [
     "KernelPolicy",
     "KernelSelection",
     "PackedConstant",
+    "canonical_workload_key",
     "kernel_capabilities",
     "select_backend_plan",
 ]

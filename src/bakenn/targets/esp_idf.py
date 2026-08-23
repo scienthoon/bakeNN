@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 from typing import TYPE_CHECKING
 
+from bakenn.artifacts import load_manifest
 from bakenn.errors import CompileError
 
 from .model import TargetDescriptor
@@ -25,7 +26,7 @@ class ESPIDFProject:
 
 
 def _load_manifest(artifacts: "CompilationArtifacts") -> dict[str, object]:
-    return json.loads(artifacts.manifest.read_text(encoding="utf-8"))
+    return load_manifest(artifacts.manifest)
 
 
 def _require_esp_target(
@@ -54,21 +55,15 @@ def export_esp_idf_component(
     descriptor, _ = _require_esp_target(artifacts, target)
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    files = (
-        artifacts.header,
-        artifacts.model_source,
-        artifacts.weights_header,
-        artifacts.weights_source,
-        artifacts.kernels_header,
-        artifacts.kernels_source,
-        artifacts.manifest,
-    )
-    for source in files:
-        shutil.copy2(source, output / source.name)
+    generated = output / "generated"
+    if generated.exists():
+        raise CompileError(f"ESP-IDF generated artifact directory already exists: {generated}")
+    shutil.copytree(artifacts.output_dir, generated)
+    load_manifest(generated / artifacts.manifest.name)
     generated_source_names = (
-        artifacts.model_source.name,
-        artifacts.weights_source.name,
-        artifacts.kernels_source.name,
+        f"generated/{artifacts.model_source.name}",
+        f"generated/{artifacts.weights_source.name}",
+        f"generated/{artifacts.kernels_source.name}",
     )
     support_source_names: list[str] = []
     for source in (*artifacts.support_sources, *artifacts.third_party_licenses):
@@ -78,12 +73,9 @@ def export_esp_idf_component(
             raise CompileError(
                 f"support file is outside the generated artifact: {source}"
             ) from error
-        destination = output / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
         if source in artifacts.support_sources:
-            support_source_names.append(relative.as_posix())
-    include_names = ["."]
+            support_source_names.append(f"generated/{relative.as_posix()}")
+    include_names = ["generated"]
     for include_dir in artifacts.support_include_dirs:
         try:
             relative = include_dir.relative_to(artifacts.output_dir)
@@ -91,15 +83,14 @@ def export_esp_idf_component(
             raise CompileError(
                 f"support include directory is outside the generated artifact: {include_dir}"
             ) from error
-        include_names.append(relative.as_posix())
-        shutil.copytree(include_dir, output / relative, dirs_exist_ok=True)
+        include_names.append(f"generated/{relative.as_posix()}")
 
     cmake_sources = " ".join(
         f'"{name}"' for name in (*generated_source_names, *support_source_names)
     )
     cmake_includes = " ".join(f'"{name}"' for name in include_names)
     strict_generated = " ".join(f'"{name}"' for name in generated_source_names)
-    manifest = _load_manifest(artifacts)
+    manifest = load_manifest(generated / artifacts.manifest.name)
     dependencies = manifest.get("bundled_dependencies", [])
     has_esp_nn = any(
         isinstance(item, dict) and item.get("name") == "ESP-NN"
@@ -258,7 +249,9 @@ def export_esp_idf_project(
                 "schema_version": 1,
                 "idf_target": descriptor.metadata["idf_target"],
                 "target": descriptor.manifest(),
-                "model_manifest": f"components/bakenn_model/{artifacts.manifest.name}",
+                "model_manifest": (
+                    f"components/bakenn_model/generated/{artifacts.manifest.name}"
+                ),
                 "execution_metrics": {
                     "cycles": "cold, median and p95 cycles over 8 warmups and 101 measured calls; unmeasured at package time",
                     "stack": "FreeRTOS high-water mark printed by the physical-board runner",

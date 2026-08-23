@@ -16,6 +16,13 @@
  * limitations under the License.
  */
 
+/*
+ * Modified by the BakeNN project from CMSIS-NN 4.0.0
+ * (ca5dc34313be2ee5c46652917c30baac96c52621): remove an unused hosted
+ * <stdio.h> dependency for freestanding generated firmware.
+ * See BAKENN_PROVENANCE.md for the upstream and patched file hashes.
+ */
+
 /* ----------------------------------------------------------------------
  * Project:      CMSIS NN Library
  * Title:        arm_convolve_1x1_s8_fast.c

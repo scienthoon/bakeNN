@@ -18,7 +18,13 @@ sys.path.insert(0, str(REPOSITORY))
 sys.path.insert(0, str(REPOSITORY / "src"))
 
 import bakenn  # noqa: E402
-from bakenn.ir import Conv2DOp, DepthwiseConv2DOp, QuantizedGraph  # noqa: E402
+from bakenn.ir import (  # noqa: E402
+    AveragePool2DOp,
+    Conv2DOp,
+    DepthwiseConv2DOp,
+    QuantizedGraph,
+)
+from bakenn.ir.ops.pool import AVERAGE_POOL_PROFILE_TFLITE_RAW_V1  # noqa: E402
 from benchmarks.tflm_compare.quantized_graph_to_tflite import (  # noqa: E402
     export_quantized_graph,
 )
@@ -125,6 +131,21 @@ def main() -> int:
         compiled = bakenn.compile(
             graph,
             arguments.output_dir / "bakenn_prefix_intermediate",
+            model_name=graph.name,
+        )
+    tflite_ops = tuple(
+        replace(op, arithmetic_profile=AVERAGE_POOL_PROFILE_TFLITE_RAW_V1)
+        if isinstance(op, AveragePool2DOp)
+        else op
+        for op in graph.ops
+    )
+    if tflite_ops != graph.ops:
+        graph = replace(graph, ops=tflite_ops)
+        # The expected bytes embedded beside the FlatBuffer must be computed
+        # from the same raw-code AveragePool contract that TFLite executes.
+        compiled = bakenn.compile(
+            graph,
+            arguments.output_dir / "bakenn_tflite_semantics_intermediate",
             model_name=graph.name,
         )
     exported = export_quantized_graph(graph)

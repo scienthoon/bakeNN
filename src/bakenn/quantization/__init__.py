@@ -9,10 +9,33 @@ from .fixedpoint import (
 def __getattr__(name: str):
     """Load the legacy MLP PTQ frontend without creating IR import cycles."""
 
-    if name == "quantize_float_graph":
-        from .ptq_graph import quantize_float_graph
+    if name in {"quantize_float_graph", "quantize_float_graph_with_report"}:
+        from .ptq_graph import quantize_float_graph, quantize_float_graph_with_report
 
-        return quantize_float_graph
+        return {
+            "quantize_float_graph": quantize_float_graph,
+            "quantize_float_graph_with_report": quantize_float_graph_with_report,
+        }[name]
+    if name in {"CalibrationEdgeReport", "CalibrationReport", "PTQResult"}:
+        from .report import CalibrationEdgeReport, CalibrationReport, PTQResult
+
+        return {
+            "CalibrationEdgeReport": CalibrationEdgeReport,
+            "CalibrationReport": CalibrationReport,
+            "PTQResult": PTQResult,
+        }[name]
+    if name in {"LayerErrorReport", "PTQVerificationReport", "verify_ptq_accuracy"}:
+        from .verification import (
+            LayerErrorReport,
+            PTQVerificationReport,
+            verify_ptq_accuracy,
+        )
+
+        return {
+            "LayerErrorReport": LayerErrorReport,
+            "PTQVerificationReport": PTQVerificationReport,
+            "verify_ptq_accuracy": verify_ptq_accuracy,
+        }[name]
     if name in {"LinearWeightGranularity", "PTQOptions"}:
         from .ptq_graph import LinearWeightGranularity, PTQOptions
 
@@ -34,13 +57,20 @@ def __getattr__(name: str):
 
 __all__ = [
     "ARITHMETIC_PROFILE",
+    "CalibrationEdgeReport",
+    "CalibrationReport",
     "FloatLinear",
     "FloatMLP",
+    "LayerErrorReport",
     "LinearWeightGranularity",
     "PTQOptions",
+    "PTQResult",
+    "PTQVerificationReport",
     "multiply_by_quantized_multiplier",
     "quantize_multiplier",
     "quantize_float_graph",
+    "quantize_float_graph_with_report",
     "quantize_ptq",
     "round_half_away_from_zero",
+    "verify_ptq_accuracy",
 ]

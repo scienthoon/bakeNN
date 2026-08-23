@@ -65,6 +65,11 @@ from bakenn.quantization.primitives import (
     quantize_compute_constants,
     quantize_linear_compute_constants_per_tensor,
 )
+from bakenn.quantization.report import (
+    CalibrationEdgeReport,
+    CalibrationReport,
+    PTQResult,
+)
 
 
 class LinearWeightGranularity(str, Enum):
@@ -599,14 +604,14 @@ def _consumers(graph: FloatGraph) -> Mapping[str, tuple[object, ...]]:
     return {name: tuple(items) for name, items in result.items()}
 
 
-def quantize_float_graph(
+def _quantize_float_graph_impl(
     graph: FloatGraph,
     calibration_data: object,
     *,
     name: str | None = None,
     options: PTQOptions | None = None,
-) -> QuantizedGraph:
-    """Deterministically PTQ a captured static FloatGraph into P0 INT8 IR."""
+) -> PTQResult:
+    """Implement PTQ once and retain the exact calibration diagnostics."""
 
     if not isinstance(graph, FloatGraph):
         raise CompileError("quantize_float_graph requires a FloatGraph")
@@ -620,12 +625,16 @@ def quantize_float_graph(
         for value_name, value in graph.values.items()
         if value.kind in (FloatValueKind.INPUT, FloatValueKind.ACTIVATION)
     }
+    element_counts = {value_name: 0 for value_name in observed}
+    sample_count = 0
     for sample in _samples(calibration_data, graph.values[graph.inputs[0]].shape):
+        sample_count += 1
         evaluated = _evaluate(graph, sample)
         for value_name in observed:
             value = evaluated[value_name]
             observed[value_name][0] = min(observed[value_name][0], float(np.min(value)))
             observed[value_name][1] = max(observed[value_name][1], float(np.max(value)))
+            element_counts[value_name] += int(value.size)
 
     qparams: dict[str, PerTensorQParams] = {
         value_name: _activation_qparams(bounds[0], bounds[1])
@@ -1102,11 +1111,62 @@ def quantize_float_graph(
     legalized = legalize_graph(raw)
     fused = fuse_clamps(legalized)
     verify_graph(fused)
-    return fused
+    report = CalibrationReport(
+        graph_name=fused.name,
+        sample_count=sample_count,
+        input_shape=tuple(graph.values[graph.inputs[0]].shape),
+        edges=tuple(
+            CalibrationEdgeReport(
+                name=value_name,
+                element_count=element_counts[value_name],
+                minimum=bounds[0],
+                maximum=bounds[1],
+                scale=qparams[value_name].scale,
+                zero_point=qparams[value_name].zero_point,
+            )
+            for value_name, bounds in observed.items()
+        ),
+    )
+    return PTQResult(fused, report)
+
+
+def quantize_float_graph_with_report(
+    graph: FloatGraph,
+    calibration_data: object,
+    *,
+    name: str | None = None,
+    options: PTQOptions | None = None,
+) -> PTQResult:
+    """PTQ a FloatGraph and return its immutable calibration report."""
+
+    return _quantize_float_graph_impl(
+        graph,
+        calibration_data,
+        name=name,
+        options=options,
+    )
+
+
+def quantize_float_graph(
+    graph: FloatGraph,
+    calibration_data: object,
+    *,
+    name: str | None = None,
+    options: PTQOptions | None = None,
+) -> QuantizedGraph:
+    """Deterministically PTQ a captured static FloatGraph into INT8 IR."""
+
+    return quantize_float_graph_with_report(
+        graph,
+        calibration_data,
+        name=name,
+        options=options,
+    ).graph
 
 
 __all__ = [
     "LinearWeightGranularity",
     "PTQOptions",
     "quantize_float_graph",
+    "quantize_float_graph_with_report",
 ]

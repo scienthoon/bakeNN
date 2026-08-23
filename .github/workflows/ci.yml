@@ -1,6 +1,7 @@
 name: ci
 
 on:
+  workflow_call:
   push:
   pull_request:
 
@@ -10,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.12"]
+        python: ["3.10", "3.11", "3.12", "3.13"]
         cc: [gcc, clang]
     steps:
       - uses: actions/checkout@v4
@@ -26,18 +27,36 @@ jobs:
 
   torch-frontend-and-wheel:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.10"
+            torch: "2.3.*"
+            torchvision: "0.18.*"
+          - python: "3.13"
+            torch: "2.10.*"
+            torchvision: "0.25.*"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: python -m pip install ".[test,torch]"
+          python-version: ${{ matrix.python }}
+      - run: >-
+          python -m pip install ".[test]"
+          "torch==${{ matrix.torch }}"
+          "torchvision==${{ matrix.torchvision }}"
+      - run: python -c "import torch, torchvision; print(torch.__version__, torchvision.__version__)"
       - run: >-
           python -m pytest -q
           tests/p0/test_torch_capture.py
           tests/p0/test_ptq_graph.py
           tests/p0/test_torch_models_c.py
+          tests/p2/test_cmsis_nn_fc.py
           tests/p3/test_esp32s3_demo.py
+          tests/p3/test_mobilenet_v2_example.py
+          tests/p3/test_model_zoo_c.py
+          tests/p3/test_torch_extended.py
         env:
           CC: gcc
           BAKENN_REQUIRE_CC: "1"
@@ -48,6 +67,24 @@ jobs:
         working-directory: /tmp
       - run: /tmp/bakenn-wheel-venv/bin/python -m pytest -q ${{ github.workspace }}/tests/p0/test_torch_models_c.py
         working-directory: /tmp
+
+  tflite-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install ".[test,tflite,tflite-verify]"
+      - run: python -c "import flatbuffers, tflite, ai_edge_litert; print(flatbuffers.__version__)"
+      - run: >-
+          python -m pytest -q
+          tests/test_tflite_comparison_adapter.py
+          tests/test_tflite_importer.py
+          tests/test_tflite_litert_differential.py
+        env:
+          CC: gcc
+          BAKENN_REQUIRE_CC: "1"
 
   freestanding-cross-toolchains:
     runs-on: ubuntu-latest
@@ -62,7 +99,12 @@ jobs:
           gcc-arm-none-eabi binutils-arm-none-eabi
           gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
       - run: python -m pip install ".[test]"
-      - run: python -m pytest -q tests/targets/test_targets.py
+      - run: >-
+          python -m pytest -q
+          tests/targets/test_targets.py
+          tests/targets/test_cortex_m4_kernels.py
+          tests/p2/test_cmsis_nn_fc.py
+          tests/p2/test_cmsis_nn_vision.py
         env:
           BAKENN_REQUIRE_ARM_CC: "1"
           BAKENN_REQUIRE_RISCV_CC: "1"

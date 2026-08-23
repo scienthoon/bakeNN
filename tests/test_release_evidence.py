@@ -5,6 +5,7 @@ from pathlib import Path
 import zipfile
 
 from scripts.build_release_evidence import build_archive
+from bakenn import __version__
 
 
 def test_release_evidence_is_deterministic_and_manifested(tmp_path: Path) -> None:
@@ -24,8 +25,16 @@ def test_release_evidence_is_deterministic_and_manifested(tmp_path: Path) -> Non
         assert names == sorted(names)
         assert "artifacts/nrf52840/firmware.elf" in names
         manifest = json.loads(archive.read("MANIFEST.json"))
-        assert manifest["bakenn_version"] == "0.1.0"
+        assert manifest["schema_version"] == 2
+        assert manifest["bakenn_version"] == __version__
         assert len(manifest["source_commit"]) == 40
+        completeness = manifest["artifact_completeness"]
+        assert completeness["exact_external_artifacts_supplied"] is True
+        assert len(completeness["historical_missing_artifacts"]) == 2
+        assert all(
+            limitation["missing"]
+            for limitation in completeness["historical_missing_artifacts"]
+        )
         assert manifest["external_artifacts"][0]["bytes"] == 24
         assert any(
             item["path"].endswith("iotlab_447626_direct_cmsis_fc_uart.txt")
@@ -56,3 +65,13 @@ def test_release_evidence_rejects_unsafe_artifact_label(tmp_path: Path) -> None:
         assert "unsafe artifact label" in str(error)
     else:
         raise AssertionError("unsafe label was accepted")
+
+
+def test_release_evidence_reports_when_no_exact_artifact_is_supplied(
+    tmp_path: Path,
+) -> None:
+    output, _ = build_archive(tmp_path / "reports-only.zip", ())
+    with zipfile.ZipFile(output) as archive:
+        manifest = json.loads(archive.read("MANIFEST.json"))
+    assert manifest["artifact_completeness"]["exact_external_artifacts_supplied"] is False
+    assert "does not substitute" in manifest["scope"]

@@ -30,9 +30,10 @@
 - [ ] Release notes link the benchmark evidence without broadening its claims.
 - [ ] Create and push an annotated `vX.Y.Z` tag from `main`.
 - [ ] Publish GitHub release artifacts and verify their SHA-256 hashes.
-- [ ] Attach the deterministic evidence ZIP containing JSON/CSV, raw UART and
-      the exact retained ELF/map files; document any historical dirty-tree,
-      missing-map or single-input limitation in the archive manifest.
+- [ ] Attach the deterministic evidence ZIP containing JSON/CSV and raw UART.
+      Supply every newly measured ELF/map/app binary through `--artifact`; the
+      archive manifest must explicitly list any historical artifact bytes that
+      were not retained. A digest alone is provenance, not a retained binary.
 - [ ] Install the published artifact once before announcing the release.
 - [ ] Protect `main` with the exact required CI checks; reject force pushes and
       branch deletion. Protect `v*` release tags against update/deletion.

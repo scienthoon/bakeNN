@@ -5,6 +5,10 @@ from typing import Mapping
 import numpy as np
 
 from bakenn.ir.types import PerTensorQParams
+from bakenn.ir.ops.pool import (
+    AVERAGE_POOL_PROFILE_BAKENN_V1,
+    AVERAGE_POOL_PROFILE_TFLITE_RAW_V1,
+)
 from bakenn.plan.types import ExecutionPlan
 from bakenn.plan.steps.pool import AveragePool2DStep, MaxPool2DStep
 from bakenn.reference.executor import execute_step
@@ -60,14 +64,23 @@ def _execute_average_pool(
             if valid_count == 0:
                 raise AssertionError("compile-time non-empty pool-window proof was violated")
             for channel in range(channels):
-                accumulator = sum(
-                    int(value) - input_qparams.zero_point
-                    for value in window[:, :, channel].reshape(-1)
+                raw_accumulator = sum(
+                    int(value) for value in window[:, :, channel].reshape(-1)
                 )
+                if step.arithmetic_profile == AVERAGE_POOL_PROFILE_BAKENN_V1:
+                    accumulator = raw_accumulator - input_qparams.zero_point * valid_count
+                    output_offset = input_qparams.zero_point
+                elif step.arithmetic_profile == AVERAGE_POOL_PROFILE_TFLITE_RAW_V1:
+                    accumulator = raw_accumulator
+                    output_offset = 0
+                else:  # pragma: no cover - IR/plan construction rejects this
+                    raise AssertionError(
+                        f"unsupported AveragePool2D profile {step.arithmetic_profile}"
+                    )
                 if abs(accumulator) > step.accumulator_bound:
                     raise AssertionError("compile-time average accumulator proof was violated")
                 result = _round_divide_half_away(accumulator, valid_count)
-                result += input_qparams.zero_point
+                result += output_offset
                 result = min(step.activation_max, max(step.activation_min, result))
                 output[0, output_y, output_x, channel] = result
     return {step.output: output}

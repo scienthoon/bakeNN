@@ -243,7 +243,7 @@ def _compile_pair(
         graph,
         tmp_path / "optimized",
         model_name="optimized",
-        backend_options=bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO),
+        backend_options=bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY),
     )
     runner = tmp_path / f"runner_{optimization[2:]}.c"
     runner.write_text(_runner_source(portable, optimized), encoding="utf-8")
@@ -317,7 +317,7 @@ def test_conv1x1_optimized_matches_portable_and_reference(
     graph = conv1x1_graph(stride=stride)
     plan = lower_to_plan(graph)
     backend = select_backend_plan(
-        plan, bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO)
+        plan, bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY)
     )
     assert backend.selections[0].kernel_id == "optimized.conv2d_1x1_o2.v1"
     assert backend.packed_constants["weight.conv2d_1x1_o2"].layout == (
@@ -358,7 +358,7 @@ def test_depthwise_3x3_optimized_matches_portable_and_reference(
     graph = depthwise3x3_graph(stride=(2, 2))
     plan = lower_to_plan(graph)
     backend = select_backend_plan(
-        plan, bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO)
+        plan, bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY)
     )
     assert backend.selections[0].kernel_id == "optimized.depthwise_3x3_c2.v1"
     assert backend.packed_constants["weight.depthwise_3x3_c2"].layout == (
@@ -466,7 +466,7 @@ def test_depthwise_optimized_has_10k_asymmetric_padding_differential(
 def test_conv_and_depthwise_optimized_candidates_fail_closed_on_unsupported_shapes() -> None:
     odd_conv = lower_to_plan(conv1x1_graph(output_channels=3))
     odd_backend = select_backend_plan(
-        odd_conv, bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO)
+        odd_conv, bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY)
     )
     assert odd_backend.selections[0].kernel_id == "portable.conv2d_s8.v1"
     assert "optimized.conv2d_1x1_o2.v1" in odd_backend.selections[0].rejected
@@ -499,7 +499,7 @@ def test_conv_and_depthwise_optimized_candidates_fail_closed_on_unsupported_shap
         outputs=("output",),
     )
     general_backend = select_backend_plan(
-        lower_to_plan(general), bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO)
+        lower_to_plan(general), bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY)
     )
     assert general_backend.selections[0].kernel_id == "portable.conv2d_s8.v1"
     with pytest.raises(CompileError, match="no supported implementation"):
@@ -511,7 +511,7 @@ def test_conv_and_depthwise_optimized_candidates_fail_closed_on_unsupported_shap
     odd_depthwise = depthwise3x3_graph(input_channels=3)
     odd_depthwise_backend = select_backend_plan(
         lower_to_plan(odd_depthwise),
-        bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO),
+        bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY),
     )
     assert odd_depthwise_backend.selections[0].kernel_id == "portable.depthwise_conv2d_s8.v1"
     with pytest.raises(CompileError, match="no supported implementation"):

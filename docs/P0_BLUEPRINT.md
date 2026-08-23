@@ -3,6 +3,13 @@
 Status: implemented host baseline; first nRF52840/TFLM evidence recorded for
 frozen FC and standalone Conv workloads
 
+This file freezes the original P0 scope and its exclusions; it is not the v1
+support matrix. BakeNN 1.0 later added an optional strict TFLite importer and a
+separate `tflite.int8.average_pool2d.raw_code.v1` profile while preserving the
+native centered AveragePool contract described below. See
+[`ARCHITECTURE.md`](ARCHITECTURE.md) and [`STABILITY.md`](../STABILITY.md) for
+the current contract.
+
 P0 is the first release that can compile representative fixed-shape MCU
 networks rather than a demonstration MLP. It is deliberately narrower than
 TFLite Micro, but every advertised combination must be statically validated,

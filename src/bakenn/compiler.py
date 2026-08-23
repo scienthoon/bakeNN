@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from bakenn.backend.portable_c import (
     CBackendOptions,
     CompilationArtifacts,
-    KernelPolicy,
     generate_portable_c,
 )
 from bakenn.ir import QuantizedGraph
@@ -19,6 +18,8 @@ from bakenn.reporting import MemoryReport
 if TYPE_CHECKING:
     from bakenn.frontends.torch_export import FloatGraph
     from bakenn.quantization.ptq_graph import PTQOptions
+    from bakenn.quantization.report import CalibrationReport
+    from bakenn.quantization.verification import PTQVerificationReport
 
 
 @dataclass(frozen=True)
@@ -39,10 +40,25 @@ class PTQCompiledModel:
     graph: QuantizedGraph
     plan: ExecutionPlan
     artifacts: CompilationArtifacts
+    calibration_report: "CalibrationReport"
 
     @property
     def memory_report(self) -> MemoryReport:
         return self.artifacts.memory_report
+
+    def verify_accuracy(
+        self, samples: object, *, max_samples: int | None = None
+    ) -> "PTQVerificationReport":
+        """Measure FP32-to-deployed-INT8 error on a validation corpus."""
+
+        from bakenn.quantization.verification import verify_ptq_accuracy
+
+        return verify_ptq_accuracy(
+            self.float_graph,
+            self.plan,
+            samples,
+            max_samples=max_samples,
+        )
 
 
 def compile(
@@ -92,44 +108,62 @@ def compile_torch_ptq(
     """
 
     from bakenn.frontends.torch_export import capture_torch_export
-    from bakenn.quantization.ptq_graph import (
-        LinearWeightGranularity,
-        PTQOptions,
-        quantize_float_graph,
-    )
+    from bakenn.quantization.ptq_graph import quantize_float_graph_with_report
 
     float_graph = capture_torch_export(model, example_input, name=name)
-    resolved_ptq_options = ptq_options
-    cmsis_target = (
-        resolve_target(target)
-        if target is not None
-        else (backend_options.target if backend_options is not None else PORTABLE_32)
-    )
-    if (
-        resolved_ptq_options is None
-        and backend_options is not None
-        and backend_options.enable_cmsis_nn
-        and backend_options.kernel_policy is not KernelPolicy.PORTABLE
-        and "armv7e-m" in cmsis_target.features
-        and "dsp" in cmsis_target.features
-    ):
-        resolved_ptq_options = PTQOptions(
-            linear_weight_granularity=LinearWeightGranularity.PER_TENSOR
-        )
-    graph = quantize_float_graph(
+    quantized = quantize_float_graph_with_report(
         float_graph,
         calibration_data,
         name=name,
-        options=resolved_ptq_options,
+        options=ptq_options,
     )
     compiled = compile(
+        quantized.graph,
+        output_dir,
+        model_name=name,
+        backend_options=backend_options,
+        target=target,
+    )
+    return PTQCompiledModel(
+        float_graph,
+        quantized.graph,
+        compiled.plan,
+        compiled.artifacts,
+        quantized.report,
+    )
+
+
+def compile_tflite(
+    source: object,
+    output_dir: str | Path,
+    *,
+    name: str | None = None,
+    backend_options: CBackendOptions | None = None,
+    target: str | TargetDescriptor | None = None,
+) -> CompiledModel:
+    """Import a strict fully-quantized TFLite model and emit standalone C.
+
+    FlatBuffers and the TFLite schema are optional host-only dependencies.
+    The generated target artifact never links either dependency or a TFLite
+    interpreter.
+    """
+
+    from bakenn.frontends.tflite import import_tflite
+
+    graph = import_tflite(source, name=name)
+    return compile(
         graph,
         output_dir,
         model_name=name,
         backend_options=backend_options,
         target=target,
     )
-    return PTQCompiledModel(float_graph, graph, compiled.plan, compiled.artifacts)
 
 
-__all__ = ["CompiledModel", "PTQCompiledModel", "compile", "compile_torch_ptq"]
+__all__ = [
+    "CompiledModel",
+    "PTQCompiledModel",
+    "compile",
+    "compile_tflite",
+    "compile_torch_ptq",
+]

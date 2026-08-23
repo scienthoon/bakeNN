@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from bakenn.errors import CompileError
+from bakenn.errors import CompileError, Diagnostic
 from .model import (
     FloatAddOp,
     FloatAveragePool1DOp,
@@ -1085,7 +1085,19 @@ def _extract_op(node: Any, values: dict[str, FloatValue], constants: dict[str, n
     target = str(node.target)
     if target not in ALLOWED_ATEN_TARGETS:
         raise CompileError(
-            f"{node.name}: unsupported torch.export operator {target}; no fallback is permitted"
+            Diagnostic(
+                code="BAKENN_TORCH_OPERATOR_UNSUPPORTED",
+                stage="torch_export",
+                location=node.name,
+                reason=(
+                    f"unsupported torch.export operator {target}; "
+                    "no fallback is permitted"
+                ),
+                suggestions=(
+                    "Replace this operation with a supported static inference operation",
+                    "Open an operator request with the exported target and static tensor shapes",
+                ),
+            )
         )
     if target == "aten.conv2d.default":
         return _extract_conv(node, values, constants)
