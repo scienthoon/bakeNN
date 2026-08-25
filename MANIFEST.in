@@ -3,6 +3,7 @@ include CODE_OF_CONDUCT.md
 include CONTRIBUTING.md
 include LICENSE
 include README.md
+include README.ko.md
 include REPRODUCING.md
 include SECURITY.md
 include STABILITY.md
