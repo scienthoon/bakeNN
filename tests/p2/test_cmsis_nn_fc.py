@@ -34,6 +34,14 @@ def _options(*, target=CORTEX_M4, packing: bool = True) -> bakenn.CBackendOption
     )
 
 
+def _reset_torch_export_test_state(torch: object) -> None:
+    """Keep Torch export tests independent of Dynamo's process-global budget."""
+
+    dynamo = getattr(torch, "_dynamo", None)
+    if dynamo is not None:
+        dynamo.reset()
+
+
 def _runner_source(
     portable: bakenn.compiler.CompiledModel,
     cmsis: bakenn.compiler.CompiledModel,
@@ -344,6 +352,7 @@ def test_torch_ptq_selects_cmsis_fc_only_with_explicit_per_tensor_ptq(
     tmp_path: Path,
 ) -> None:
     torch = pytest.importorskip("torch")
+    _reset_torch_export_test_state(torch)
 
     class MnistMLP(torch.nn.Module):
         def __init__(self) -> None:
@@ -394,6 +403,7 @@ def test_cmsis_static_priority_preserves_default_ptq_and_small_fc_falls_back(
     tmp_path: Path,
 ) -> None:
     torch = pytest.importorskip("torch")
+    _reset_torch_export_test_state(torch)
 
     model = torch.nn.Linear(4, 4).eval()
     with torch.no_grad():
@@ -454,6 +464,7 @@ def test_cmsis_opt_in_does_not_change_ptq_when_policy_forces_portable(
     tmp_path: Path,
 ) -> None:
     torch = pytest.importorskip("torch")
+    _reset_torch_export_test_state(torch)
 
     model = torch.nn.Linear(16, 8).eval()
     with torch.no_grad():
