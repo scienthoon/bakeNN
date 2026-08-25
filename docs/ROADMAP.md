@@ -691,7 +691,7 @@ Release work:
   (**in progress**; generated C ABI v1 is emitted and validated);
 - test wheel build, clean install, PyTorch optional extra and cross-toolchain
   matrix in CI (**implemented**; Python 3.10--3.13 runs under GCC/Clang, with
-  Torch 2.3/torchvision 0.18 and Torch 2.10/torchvision 0.25 endpoint jobs);
+  Torch 2.9/torchvision 0.24 and Torch 2.10/torchvision 0.25 endpoint jobs);
 - publish complete generated examples and reproducible benchmark bundles;
 - add semantic-version rules for IR, arithmetic profile, kernel ID, packing
   layout, manifest and result schema (**implemented for the public v1

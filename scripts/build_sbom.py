@@ -85,7 +85,7 @@ def build_sbom(output: Path) -> Path:
         ),
         _component(
             "torch",
-            ">=2.3,<2.11",
+            ">=2.9,<2.11",
             scope="optional",
             license_id="BSD-3-Clause",
             purl="pkg:pypi/torch",
@@ -93,7 +93,7 @@ def build_sbom(output: Path) -> Path:
         ),
         _component(
             "torchvision",
-            ">=0.18,<0.26",
+            ">=0.24,<0.26",
             scope="optional",
             license_id="BSD-3-Clause",
             purl="pkg:pypi/torchvision",

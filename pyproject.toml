@@ -32,10 +32,10 @@ Issues = "https://github.com/scienthoon/bakeNN/issues"
 Changelog = "https://github.com/scienthoon/bakeNN/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-torch = ["torch>=2.3,<2.11"]
+torch = ["torch>=2.9,<2.11"]
 tflite = ["flatbuffers>=23,<26", "tflite>=2.18,<3"]
 tflite-verify = ["ai-edge-litert>=2.2,<3"]
-model-zoo = ["torch>=2.3,<2.11", "torchvision>=0.18,<0.26"]
+model-zoo = ["torch>=2.9,<2.11", "torchvision>=0.24,<0.26"]
 test = ["pytest>=8"]
 
 [tool.setuptools.packages.find]

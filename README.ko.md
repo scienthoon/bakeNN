@@ -657,9 +657,10 @@ PYTHONPATH=src python -m pytest -q
 
 CI는 Python 3.10, 3.11, 3.12, 3.13과 GCC 및 Clang 조합으로 의존성이
 적은 테스트 스위트를 실행합니다. 프레임워크 행렬은 추가로 Python
-3.10에서 Torch 2.3/torchvision 0.18, Python 3.13에서 Torch
+3.10에서 Torch 2.9/torchvision 0.24, Python 3.13에서 Torch
 2.10/torchvision 0.25를 실행하며, wheel 빌드와 깨끗한 설치 검사도
-포함합니다.
+포함합니다. 이 조합은 v1에서 지원하는 프레임워크 양 끝점입니다. 이전
+Torch export IR 방언은 근사 해석하지 않고 거부합니다.
 
 생성된 모델은 호출자 소유의 원시 아레나 포인터를 노출합니다. 보고된
 `*_ARENA_SIZE` 바이트를 `*_ARENA_ALIGNMENT`에 맞춰 정확히
