@@ -174,6 +174,8 @@ def test_missing_optional_dependency_is_a_clear_compile_error(monkeypatch: pytes
     real_import = importer.importlib.import_module
 
     def missing(name: str):  # type: ignore[no-untyped-def]
+        if name == "flatbuffers":
+            return SimpleNamespace()
         if name == "tflite":
             raise ModuleNotFoundError("No module named 'tflite'", name="tflite")
         return real_import(name)
@@ -192,6 +194,8 @@ def test_old_tflite_schema_package_is_rejected_fail_closed(
     old_schema = SimpleNamespace(Tensor=object)
 
     def old_version(name: str):  # type: ignore[no-untyped-def]
+        if name == "flatbuffers":
+            return SimpleNamespace()
         if name == "tflite":
             return old_schema
         return real_import(name)
