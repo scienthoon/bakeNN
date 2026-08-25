@@ -671,8 +671,9 @@ training path that ends at the existing verified quantized IR.
 
 ## R8 — Compiler and release hardening
 
-Status: partially implemented for the v1 freeze. BakeNN is still
-`1.0.0.dev0`; the final 1.0 release has not been published.
+Status: the public contract and release gates described below are implemented
+and frozen in BakeNN 1.0.0. The remaining compiler-depth items stay on the
+post-1.0 roadmap.
 
 Compiler work:
 
@@ -688,7 +689,7 @@ Compiler work:
 Release work:
 
 - freeze the public Python API and generated C ABI for the first release
-  (**in progress**; generated C ABI v1 is emitted and validated);
+  (**implemented**; generated C ABI v1 is emitted and validated);
 - test wheel build, clean install, PyTorch optional extra and cross-toolchain
   matrix in CI (**implemented**; Python 3.10--3.13 runs under GCC/Clang, with
   Torch 2.9/torchvision 0.24 and Torch 2.10/torchvision 0.25 endpoint jobs);
@@ -702,8 +703,8 @@ Generated manifests now carry strict schema/ABI/profile versions, canonical
 graph/plan/constant fingerprints, selected-kernel provenance, and an artifact
 inventory plus a canonical manifest-payload digest. Calibration and
 PTQ-verification reports have versioned schemas.
-SBOM/release-evidence work exists in the shared tree but remains part of the
-unreleased v1 hardening pass.
+SBOM and deterministic release-evidence generation are part of the 1.0.0
+release workflow.
 
 ## Explicitly deferred
 

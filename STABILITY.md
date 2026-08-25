@@ -1,9 +1,8 @@
 # Stability policy
 
-BakeNN is currently `1.0.0.dev0`: the v1 P0 implementation is in progress and
-has not yet been published as the final 1.0 release. This document freezes the
-compatibility contract targeted by that release without presenting unfinished
-roadmap items as released features.
+BakeNN 1.0.0 is the first stable release of the static batch-one INT8 AOT
+compiler contract. This document defines that released compatibility contract
+without presenting unfinished roadmap items as released features.
 
 ## Versioned deployment contracts
 
@@ -60,8 +59,7 @@ generated files.
 The top-level functions and types documented in the README are the intended v1
 public API. Internal modules under `bakenn.ir`, `bakenn.plan`, backend
 families, and frontend capture types remain compiler internals unless
-explicitly documented. During `1.0.0.dev0`, the final release can still
-receive documented corrections; after 1.0, incompatible public API changes
+explicitly documented. Starting with 1.0.0, incompatible public API changes
 follow the major-version rule above.
 
 ## Intentional v1 product constraints
