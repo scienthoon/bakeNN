@@ -25,7 +25,7 @@ jobs:
           BAKENN_REQUIRE_CC: "1"
       - run: python -m pip wheel . --no-deps -w wheelhouse
 
-  torch-frontend-and-wheel:
+  torch-frontend-matrix:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -67,6 +67,12 @@ jobs:
         working-directory: /tmp
       - run: /tmp/bakenn-wheel-venv/bin/python -m pytest -q ${{ github.workspace }}/tests/p0/test_torch_models_c.py
         working-directory: /tmp
+
+  torch-frontend-and-wheel:
+    runs-on: ubuntu-latest
+    needs: torch-frontend-matrix
+    steps:
+      - run: echo "Torch frontend and installed-wheel checks passed at both supported endpoints."
 
   tflite-frontend:
     runs-on: ubuntu-latest
