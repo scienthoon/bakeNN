@@ -3,7 +3,7 @@
 All notable changes are recorded here. BakeNN follows semantic versioning once
 its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 
-## 1.0.0 - Unreleased
+## 1.0.0 - 2026-08-26
 
 ### Added
 

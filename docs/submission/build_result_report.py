@@ -16,7 +16,7 @@ from docx.shared import Inches, Pt, RGBColor
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "docs/submission/BakeNN_오픈소스개발자대회_결과보고서_초안.docx"
-FONT = "AppleGothic"  # installed TTF with Korean glyphs for LibreOffice/PDF rendering
+FONT = "Arial Unicode MS"  # installed system font with Korean glyphs for LibreOffice/PDF rendering
 MONO = "Menlo"
 BLUE = "2E74B5"
 DARK_BLUE = "1F4D78"
@@ -363,8 +363,8 @@ def build() -> Path:
         (
             ("저장소", "https://github.com/scienthoon/bakeNN"),
             ("라이선스", "Apache License 2.0"),
-            ("버전", "BakeNN 0.1.0 (출품 준비 브랜치)"),
-            ("작성 기준일", "2026년 8월 17일"),
+            ("버전", "BakeNN 1.0.0"),
+            ("작성 기준일", "2026년 8월 26일"),
             ("작성자", "scienthoon (GitHub)"),
         ),
         (2700, 6660),
@@ -498,8 +498,8 @@ def build() -> Path:
     _add_callout(
         document,
         "전체 회귀",
-        "2026-08-17 제출 준비 브랜치에서 287 tests + 6 subtests가 통과했다. "
-        "GitHub Actions는 Python 3.10/3.12 × GCC/Clang, PyTorch frontend/wheel, ARM/RISC-V cross-toolchain, ESP-IDF 3종을 검증한다.",
+        "2026-08-26 v1.0.0 릴리스 브랜치에서 355 tests + 6 subtests가 통과했다. "
+        "GitHub Actions는 Python 3.10~3.13 × GCC/Clang, PyTorch frontend/wheel, ARM/RISC-V cross-toolchain, ESP-IDF 3종을 검증한다.",
     )
     for item in (
         "hand-calculated golden, malformed IR, qparam/overflow/alias 검증과 randomized differential를 함께 수행한다.",
@@ -717,7 +717,7 @@ def build() -> Path:
             ("시연영상 링크", "미완료", "화면 녹화·업로드 후 공식 양식과 본 문서에 링크 추가 필요"),
             ("외부 clean-room PR", "미완료", "제3자가 fresh clone에서 1-command verifier 실행 후 JSON PR"),
             ("trained MNIST physical", "완료", "original ESP32 UART, 101회 cycles, size와 100장 exact output 체크인"),
-            ("최종 release/tag", "미완료", "v1 hardening PR merge 후 main에서 v1.0.0 tag/release"),
+            ("최종 release/tag", "완료", "main의 v1.0.0 tag, GitHub Release와 PyPI 배포"),
         ),
         (2600, 1500, 5260),
         numeric_columns=(1,),
