@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from typing import TYPE_CHECKING, Iterable
 
+from bakenn.artifacts import load_manifest
 from bakenn.errors import CompileError
 
 from .model import TargetArchitecture, TargetDescriptor
@@ -307,7 +308,7 @@ def build_freestanding_elf(
         )
     if optimization not in ("-O0", "-O1", "-O2", "-O3", "-Os"):
         raise ValueError("optimization must be one of -O0/-O1/-O2/-O3/-Os")
-    metadata = json.loads(artifacts.manifest.read_text(encoding="utf-8"))
+    metadata = load_manifest(artifacts.manifest)
     artifact_target = metadata["backend"]["target"]["id"]
     if artifact_target != descriptor.target_id:
         raise CompileError(

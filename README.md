@@ -1,5 +1,7 @@
 # BakeNN
 
+English | [한국어](README.ko.md)
+
 [![CI](https://github.com/scienthoon/bakeNN/actions/workflows/ci.yml/badge.svg)](https://github.com/scienthoon/bakeNN/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
@@ -15,8 +17,24 @@ interpreter on the target.
 python -m pip install "bakenn[torch]"
 ```
 
-Python 3.10--3.12 is supported.  `torch` is needed only for the PyTorch
+Python 3.10--3.13 is supported.  `torch` is needed only for the PyTorch
 frontend; generated firmware has no Python or framework dependency.
+
+For the optional host-only fully-quantized TFLite importer, install:
+
+```bash
+python -m pip install "bakenn[tflite]"
+```
+
+The optional LiteRT reference oracle used by BakeNN's importer differential
+tests is available with `bakenn[tflite,tflite-verify]`; it is not needed to
+compile a model.
+
+The importer is strict rather than approximate. In particular, TFLite
+AveragePool nodes retain the versioned raw-code rounding profile used by
+LiteRT's built-in reference kernel; BakeNN does not reinterpret them as its
+native centered AveragePool arithmetic. Supported imports are gated against
+LiteRT, the Python integer reference, and generated C byte for byte.
 
 ## Ten-line quickstart
 
@@ -37,6 +55,13 @@ print(compiled.memory_report.to_text())
 the FP32 activation ranges used to choose INT8 scales and zero points; BakeNN
 then verifies the integer graph and emits the deployment library.
 
+`compiled.calibration_report` records the consumed sample count, FP32 range,
+and chosen qparams for every calibrated edge. Run
+`compiled.verify_accuracy(validation_samples)` for a separate layer-by-layer
+FP32-versus-dequantized-INT8 error report (maximum, mean, RMS, and INT8 endpoint
+counts). This diagnoses PTQ accuracy; generated C is independently required to
+match the integer reference byte for byte.
+
 ## Generated artifacts
 
 Each compilation directory contains inspectable, deterministic artifacts:
@@ -53,6 +78,13 @@ bknn_classifier_memory.txt/.json  Flash/SRAM planning report
 Target overlays additionally copy only the selected pinned CMSIS-NN or ESP-NN
 source closure and its license.  The generated library uses caller-owned
 input, output and arena buffers; it performs no heap allocation.
+
+The v1 artifacts declare C ABI version 1, manifest schema version 4, and their
+versioned numerical-profile ID. Model or compiler changes require regenerating
+and revalidating the complete artifact set; do not mix headers, sources,
+manifests, or packed constants from separate compilations. The schema-v4
+manifest includes both an inventory of generated files and a canonical digest
+of the manifest payload itself.
 
 ## Why use BakeNN for fixed-model firmware?
 
@@ -71,11 +103,11 @@ input, output and arena buffers; it performs no heap allocation.
   unsafe accumulator bounds and budget violations fail on the host; there is
   no target-side float fallback.
 
-The tradeoff is deliberate: BakeNN uses static batch one, fixed shapes and one
-public input/output, and supports fewer operators than TFLM.  Those are product
-constraints for firmware that rebuilds when its linked model changes, not an
-attempt to provide a dynamic model runtime.  See [STABILITY.md](STABILITY.md)
-for the compatibility policy.
+The tradeoff is deliberate: BakeNN v1 uses static batch one, fixed shapes and
+one public input/output, and supports fewer operators than TFLM. Those are
+product constraints for firmware that rebuilds when its linked model changes,
+not an attempt to provide a dynamic model runtime. See
+[STABILITY.md](STABILITY.md) for the compatibility policy.
 
 For a sourced comparison with TFLM and Edge Impulse EON—including where each
 system wins—see [docs/COMPARISON.md](docs/COMPARISON.md).
@@ -100,10 +132,16 @@ physical-board corpus. FP32 accuracy is 96.92%; generated-C INT8 accuracy is
 byte mismatches. See [the evidence manifest](examples/mnist/evidence/mnist_evidence.json)
 and [reproduction instructions](examples/mnist/evidence/README.md).
 
-The original-ESP32 full-model project also cross-builds successfully. Its
-cycles remain unmeasured until a physical UART transcript is checked in; the
-[cross-build record](benchmarks/cross_build/results/mnist_esp32_cross_build.json)
-is deliberately excluded from the performance tables below.
+The same frozen full model was also measured on a physical original ESP32 at
+160 MHz. Across 101 timed calls it recorded 3,165,624 median cycles
+(19.785150 ms); the subsequent 100-image pass classified 99 correctly and
+matched all 1,000 expected INT8 output bytes. The app binary was 236,208 B,
+including a 79,500-byte embedded validation corpus; the BakeNN model component
+itself occupied 8,871 B of Flash and used a 3,920-byte activation arena. See the
+[physical result, raw UART and size evidence](benchmarks/esp32/results/mnist_trained_esp32.md).
+The earlier [cross-build record](benchmarks/cross_build/results/mnist_esp32_cross_build.json)
+remains separately indexed as toolchain evidence rather than a second physical
+measurement.
 
 The trained model also has a same-graph Cortex-M4 comparison against Apache
 TVM 0.16.0 AOT+USMP+CMSIS-NN. Both generated C paths matched 1,000/1,000 output
@@ -405,14 +443,15 @@ compiled = bakenn.compile(qgraph, "build/classifier")
 ```
 
 P2 kernel selection is explicit and reproducible. Portable C remains the
-default. To allow verified shape-specialized kernels and weight packing:
+default. To opt into deterministic capability-priority selection of verified
+shape-specialized kernels and weight packing:
 
 ```python
 compiled = bakenn.compile(
     qgraph,
     "build/classifier",
     backend_options=bakenn.CBackendOptions(
-        kernel_policy=bakenn.KernelPolicy.AUTO,
+        kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
     ),
 )
 ```
@@ -476,7 +515,7 @@ component download while building the generated project.
 BakeNN fixes ESP-NN's TFLM-compatible double-rounding profile and never enables
 `CONFIG_NN_SKIP_NUDGE`. Capability checks reject unsupported dilation,
 depthwise geometry, alignment and the AveragePool cases whose rounding cannot
-be proven byte-exact with `bakenn.int8.v1`; `AUTO` then falls back, while
+be proven byte-exact with `bakenn.int8.v1`; `STATIC_PRIORITY` then falls back, while
 `REQUIRE_OPTIMIZED` reports the exact reason. Host tests execute the original
 ESP32 optimized C and compare it byte-for-byte with BakeNN's integer reference.
 ESP32-S3 wrappers are host-checked through the official ESP-NN ANSI oracle and
@@ -495,7 +534,7 @@ report = bakenn.build_freestanding_elf(
 )
 
 esp_options = bakenn.CBackendOptions(
-    kernel_policy=bakenn.KernelPolicy.AUTO,
+    kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
     enable_esp_nn=True,
     target=bakenn.ESP32_S3,
 )
@@ -522,10 +561,12 @@ the original ESP32 MobileNetV2 comparison is recorded under
 [`benchmarks/esp32/results`](benchmarks/esp32/results). ESP32-S3 SIMD cycles
 and whole-firmware energy remain unmeasured. See [the target-layer contract](docs/TARGETS.md).
 
-`AUTO` currently means "select an applicable verified specialization". It is
-not a target cost model and does not promise lower latency, Flash, or energy.
-Portable therefore remains the default until a physical-target measured cost
-table is available. Host smoke comparisons for each implemented family
+`STATIC_PRIORITY` chooses by capability predicate and declared priority; it
+does not promise lower latency, Flash, or energy. `MEASURED` consults only an
+exact physical cost entry for the canonical workload, target, toolchain, and
+flags, and otherwise uses portable C. `AUTO` is a deprecated compatibility
+alias for `STATIC_PRIORITY`, not a fastest mode. Portable remains the default.
+Host smoke comparisons for each implemented family
 can be run with:
 
 ```bash
@@ -543,6 +584,31 @@ PyTorch only when used. It produces immutable BakeNN-owned types immediately;
 the IR, planner, reference executor, and backend do not import PyTorch. The
 generated firmware never depends on PyTorch, TensorFlow, FlatBuffers, an
 interpreter, C++, or dynamic allocation.
+
+The optional host-only TFLite frontend converts its accepted subset immediately
+to BakeNN-owned IR:
+
+```python
+compiled = bakenn.compile_tflite(
+    "classifier.tflite", "build/classifier", name="classifier"
+)
+```
+
+It currently accepts TFLite schema version 3, exactly one subgraph and public
+input/output, static batch-one rank-2/3/4 INT8 activations, and these builtin
+versions: `CONV_2D` v3, `DEPTHWISE_CONV_2D` v3, `FULLY_CONNECTED` v4 with bias
+or v6 without bias, `ADD` v2, `AVERAGE_POOL_2D`/`MAX_POOL_2D` v2, `RESHAPE` v1,
+and `PAD`/`PADV2` v2. Fused activation is limited to `NONE`, `RELU`, and
+`RELU6`. Unsupported operators/versions, dynamic, variable or sparse tensors,
+external buffers, custom ops, grouped Conv2D, and incompatible qparams fail
+during host import. Weights must be symmetric INT8 with zero point 0 on the
+expected quantized axis; INT32 bias scales must equal input scale times weight
+scale, and `PADV2` must encode affine real zero. The optional parser packages
+do not add TFLite runtime or FlatBuffers dependencies to generated target code.
+The v1 gate runs matching models through LiteRT's built-in reference resolver,
+the imported BakeNN integer executor, and compiled C and requires byte-exact
+outputs. Host delegates such as XNNPACK are not used as this firmware
+correctness oracle because they can choose a different one-LSB tie rule.
 
 Calibration accepts arrays, tensors, iterables, and single-input
 `TensorDataset`/`DataLoader` batches. Samples are snapshotted while streaming so
@@ -565,6 +631,13 @@ PYTHONPATH=src python -m pytest -q
 The end-to-end test generates C, compiles it with the host C compiler, runs it,
 and compares its outputs byte-for-byte with the independent Python integer
 reference.
+
+CI runs the dependency-light suite on Python 3.10, 3.11, 3.12, and 3.13 with
+both GCC and Clang. The framework matrix additionally exercises Torch
+2.9/torchvision 0.24 on Python 3.10 and Torch 2.10/torchvision 0.25 on Python
+3.13, including wheel build and clean-install checks. Those are the supported
+v1 framework endpoints; older Torch export IR dialects are rejected rather
+than interpreted approximately.
 
 Generated models expose a raw caller-owned arena pointer. Allocate exactly the
 reported `*_ARENA_SIZE` bytes with `*_ARENA_ALIGNMENT`; pass `NULL` when the

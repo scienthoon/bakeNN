@@ -1,6 +1,6 @@
 # BakeNN roadmap
 
-Status date: 2026-08-15
+Status date: 2026-08-24
 
 This document starts from the code that exists today and defines the work
 required before BakeNN can make target-performance or broad compatibility
@@ -13,6 +13,8 @@ The following are implemented and covered by the current host test suite:
 
 - static batch-one INT8 graph, verification, liveness, arena and scratch plan;
 - PyTorch FP32 eval capture and deterministic min/max PTQ;
+- deterministic calibration reports and layer-wise FP32-versus-deployed-INT8
+  validation reports;
 - per-tensor affine INT8 activations, per-channel symmetric INT8 weights,
   INT32 bias/accumulator proofs and `bakenn.int8.v1` Q31 requantization;
 - standalone heap-free C11 generation and an independent Python integer
@@ -29,8 +31,9 @@ The following are implemented and covered by the current host test suite:
 - ARM/RISC-V cross-link and symbol audit, plus ESP-IDF project generation;
 - Python reference versus generated-C byte-exact tests.
 
-The current full suite passes 257 tests and 6 subtests. Cortex-M4 ELF
-disassembly contains the expected `smlad` instructions. A first physical
+The host suite, framework matrix, and cross-build jobs cover the implemented
+surface. Cortex-M4 ELF disassembly contains the expected `smlad` instructions.
+A first physical
 nRF52840DK result is recorded for a frozen FC graph and a standalone Conv2D
 graph; full-model and full-peak-SRAM evidence remains future work.
 
@@ -52,14 +55,16 @@ graph; full-model and full-peak-SRAM evidence remains future work.
 
 ## R1 — Make kernel selection honest
 
-Priority: immediate, no physical board required.
+Status: implemented and host-tested; physical cost tables remain evidence work.
 
-The selector currently has three policies: `PORTABLE`, `AUTO` and
-`REQUIRE_OPTIMIZED`. `AUTO` filters capability predicates and chooses the
-highest static priority. `TargetDescriptor.measured_costs` is recorded but is
-not yet consulted.
+The selector now defaults to `PORTABLE`. `STATIC_PRIORITY` filters capability
+predicates and chooses the highest declared priority. `MEASURED` consults only
+physical cost entries matching the canonical workload, exact target toolchain,
+and flags, then falls back to portable C when no exact entry exists.
+`REQUIRE_OPTIMIZED` remains a coverage/audit mode. `AUTO` is deprecated and is
+only a compatibility alias for `STATIC_PRIORITY`, never measured fastest.
 
-Work:
+Implemented:
 
 - separate selection basis from failure policy, for example:
   - `PORTABLE`;
@@ -88,7 +93,7 @@ Acceptance:
 
 Priority: immediate after the R1 selector contract. The compiler, generated-C
 shape and host differential tests can be completed without a physical board;
-promotion into measured `AUTO` selection still requires R2/R3 evidence.
+promotion through `MEASURED` selection still requires R2/R3 evidence.
 
 Motivation:
 
@@ -208,7 +213,7 @@ Completion has two levels:
 1. **Host-complete:** candidates are byte-exact and available through explicit
    experimental/static selection.
 2. **Measured-default:** an exact target/workload/toolchain cost entry proves a
-   candidate wins within Flash/SRAM budgets; only then may measured `AUTO`
+   candidate wins within Flash/SRAM budgets; only then may `MEASURED`
    select it.
 
 ## R2 — Hardware benchmark package and remote result intake
@@ -359,10 +364,11 @@ Planned ESP32-S3 kernel order:
 6. `esp32s3.global_average_pool2d_s8.v1`;
 7. `esp32s3.max_pool2d_2x2_s2.v1`.
 
-The first version may support narrow shape/alignment predicates. `AUTO` must
-fall back for unaligned channels, unsupported tails, PSRAM placement or scratch
-pressure unless a separately tested variant covers the case. Board evidence
-must distinguish internal SRAM from PSRAM and record cache configuration.
+The first version may support narrow shape/alignment predicates.
+`STATIC_PRIORITY` must fall back for unaligned channels, unsupported tails,
+PSRAM placement or scratch pressure unless a separately tested variant covers
+the case. Board evidence must distinguish internal SRAM from PSRAM and record
+cache configuration.
 
 ### ESP32-P4
 
@@ -594,29 +600,55 @@ frontend mapping and malformed/randomized tests.
 
 ## R6 — Fully quantized TFLite import
 
-Priority: after the core selection and target evidence contracts are stable.
+Status: implemented and host-tested for the exact subset below.
 
 Purpose: accept `.tflite` as a host-side interchange format without shipping a
 TFLite interpreter or FlatBuffer parser in firmware.
 
-Work:
+Implemented:
 
 - make FlatBuffer parsing an optional host dependency;
 - import static fully-quantized INT8 tensors and supported operator semantics
   into `QuantizedGraph`;
 - validate tensor layouts, per-axis qparams, bias scales, fused activation and
   operator versions;
-- define how TFLite's arithmetic behavior maps to BakeNN profiles;
-- reject an arithmetic mismatch unless a separately versioned, tested profile
-  exists;
-- add TFLite interpreter versus BakeNN integer/C differential fixtures.
+- map only arithmetic that satisfies BakeNN's declared profile and reject a
+  mismatch rather than silently approximating it;
+- round-trip supported exported fixtures, validate a frozen MNIST TFLite model
+  against all committed expected bytes, and compare generated C with the
+  BakeNN integer reference;
+- run MLP and CNN fixtures through LiteRT's built-in reference resolver, the
+  imported BakeNN integer plan, and generated C with zero byte mismatches.
+
+The implemented surface is TFLite schema version 3, one subgraph and one
+public input/output, static batch-one rank-2/3/4 INT8 activations, and these
+builtin versions only: `CONV_2D` v3, `DEPTHWISE_CONV_2D` v3,
+`FULLY_CONNECTED` v4 with bias or v6 without bias, `ADD` v2,
+`AVERAGE_POOL_2D`/`MAX_POOL_2D` v2, `RESHAPE` v1, and `PAD`/`PADV2` v2. Fused
+activation is limited to `NONE`, `RELU`, and `RELU6`. The importer rejects
+dynamic, variable, and sparse tensors, custom ops, unsupported operator
+versions, grouped Conv2D, and incompatible activation/weight/bias qparams.
+Softmax and all unlisted builtins remain outside the imported subset.
+
+The external-runtime differential uses LiteRT's built-in reference resolver as
+the versioned integer oracle. Optimized host delegates are performance paths,
+not the firmware arithmetic oracle, and may differ at a one-LSB tie.
+
+`AVERAGE_POOL_2D` is imported with
+`tflite.int8.average_pool2d.raw_code.v1`, which reproduces LiteRT's rounding of
+the raw INT8-code sum. It is deliberately distinct from BakeNN's native
+centered AveragePool profile: with a nonzero zero point the two can differ by
+one LSB at a half tie. The gate includes a hand-calculated tie case, complete
+MLP/TinyCNN/residual fixtures, and a MobileNet prefix; the benchmark-only
+reverse serializer fails closed for a centered-profile AveragePool.
 
 Acceptance:
 
 - generated firmware has no TFLite, FlatBuffers or interpreter dependency;
 - unsupported operators and incompatible qparams fail at import time;
-- supported imports have byte-exact or explicitly documented profile-level
-  comparison results.
+- supported imports produce generated C that is byte-exact with the BakeNN
+  integer reference and the LiteRT built-in reference resolver for the gated
+  MLP and CNN fixtures.
 
 ## R7 — Optional QAT
 
@@ -639,6 +671,9 @@ training path that ends at the existing verified quantized IR.
 
 ## R8 — Compiler and release hardening
 
+Status: partially implemented for the v1 freeze. BakeNN is still
+`1.0.0.dev0`; the final 1.0 release has not been published.
+
 Compiler work:
 
 - implement profitable whole-tensor constant folding rather than analysis-only
@@ -652,13 +687,23 @@ Compiler work:
 
 Release work:
 
-- freeze the public Python API and generated C ABI for the first release;
+- freeze the public Python API and generated C ABI for the first release
+  (**in progress**; generated C ABI v1 is emitted and validated);
 - test wheel build, clean install, PyTorch optional extra and cross-toolchain
-  matrix in CI;
+  matrix in CI (**implemented**; Python 3.10--3.13 runs under GCC/Clang, with
+  Torch 2.9/torchvision 0.24 and Torch 2.10/torchvision 0.25 endpoint jobs);
 - publish complete generated examples and reproducible benchmark bundles;
 - add semantic-version rules for IR, arithmetic profile, kernel ID, packing
-  layout, manifest and result schema;
+  layout, manifest and result schema (**implemented for the public v1
+  contracts: C ABI v1, manifest schema v4, and versioned numerical profiles**);
 - document supported models separately from supported individual operations.
+
+Generated manifests now carry strict schema/ABI/profile versions, canonical
+graph/plan/constant fingerprints, selected-kernel provenance, and an artifact
+inventory plus a canonical manifest-payload digest. Calibration and
+PTQ-verification reports have versioned schemas.
+SBOM/release-evidence work exists in the shared tree but remains part of the
+unreleased v1 hardening pass.
 
 ## Explicitly deferred
 
@@ -674,8 +719,9 @@ These are not near-term goals:
 
 ## Recommended execution order
 
-1. R1 measured-selection semantics.
-2. R1A OPT-01/02: establish the fair benchmark and remove avoidable overhead
+1. Finish the v1 R8 API/ABI documentation and release-evidence freeze; R1
+   measured-selection semantics are implemented.
+2. R1A OPT-01/02: maintain the fair benchmark and remove avoidable overhead
    from the generic portable Conv.
 3. R1A OPT-03/04: add the static direct and budgeted-unroll candidates behind
    explicit experimental/static selection.
@@ -689,10 +735,11 @@ These are not near-term goals:
 8. R5's MobileNetV3-small, EfficientNet-Lite and compact U-Net host baselines
    are complete; next admit one exact YOLO/SSD raw-head and postprocess
    contract only after its static ABI is specified.
-9. R6 TFLite import.
+9. Extend the completed R6 host-only TFLite importer only when a model requires
+   another exact operator/profile contract.
 10. R7 QAT if PTQ accuracy data justifies it.
 11. R8 API/ABI freeze and release evidence.
 
-The next implementation task should therefore be R1 selection semantics,
-followed by the R1A benchmark and portable-Conv cleanup—not another
-speculative target kernel or an unmeasured claim based on host timing.
+The next implementation work should preserve the v1 freeze, then follow the
+evidence-gated R1A/R2/R3 ordering rather than enabling a target kernel from
+host timing alone.

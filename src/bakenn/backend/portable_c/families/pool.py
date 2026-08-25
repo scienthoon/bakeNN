@@ -9,6 +9,10 @@ from bakenn.backend.esp_nn.integration import (
     pool_emission as esp_nn_pool_emission,
 )
 from bakenn.ir.types import PerTensorQParams
+from bakenn.ir.ops.pool import (
+    AVERAGE_POOL_PROFILE_BAKENN_V1,
+    AVERAGE_POOL_PROFILE_TFLITE_RAW_V1,
+)
 from bakenn.errors import CompileError
 from bakenn.plan import ExecutionPlan
 from bakenn.plan.steps.pool import AveragePool2DStep, MaxPool2DStep
@@ -60,6 +64,8 @@ def _cmsis_average_rounding_is_exact(
     step: AveragePool2DStep,
     plan: ExecutionPlan,
 ) -> bool:
+    if step.arithmetic_profile == AVERAGE_POOL_PROFILE_TFLITE_RAW_V1:
+        return True
     input_type = plan.tensors[step.input].tensor_type
     output_type = plan.tensors[step.output].tensor_type
     qparams = input_type.qparams
@@ -114,7 +120,7 @@ def _average_capabilities(
             else (
                 "CMSIS-NN AveragePool requires source bundling, an ARMv7E-M DSP "
                 "target, signed-32-bit dimensions/scratch, symmetric padding, and "
-                "a zero-point/window combination that preserves BakeNN v1 "
+                "an arithmetic profile compatible with its raw-code "
                 "half-away rounding"
             )
         ),
@@ -262,6 +268,7 @@ def _average_kernel(context: StepEmitContext) -> KernelEmission:
     size_t stride_h, size_t stride_w,
     size_t pad_top, size_t pad_left,
     int32_t zero_point,
+    int32_t center_before_rounding,
     int32_t activation_min, int32_t activation_max);""",
         definition=f"""static int32_t {symbol}_pool_round_divide_away(int32_t value, int32_t divisor) {{
     const uint32_t magnitude = value < 0 ? (uint32_t)(-(int64_t)value) : (uint32_t)value;
@@ -278,6 +285,7 @@ void {function}(
     size_t stride_h, size_t stride_w,
     size_t pad_top, size_t pad_left,
     int32_t zero_point,
+    int32_t center_before_rounding,
     int32_t activation_min, int32_t activation_max) {{
     for (size_t output_y = 0; output_y < output_h; ++output_y) {{
         for (size_t output_x = 0; output_x < output_w; ++output_x) {{
@@ -298,12 +306,18 @@ void {function}(
                         }}
                         const size_t input_index =
                             (((size_t)input_y * input_w + (size_t)input_x) * channels) + channel;
-                        accumulator += (int32_t)input[input_index] - zero_point;
+                        accumulator += (int32_t)input[input_index];
                         ++valid_count;
                     }}
                 }}
+                if (center_before_rounding != 0) {{
+                    accumulator -= zero_point * (int32_t)valid_count;
+                }}
                 int32_t result = {symbol}_pool_round_divide_away(
-                    accumulator, (int32_t)valid_count) + zero_point;
+                    accumulator, (int32_t)valid_count);
+                if (center_before_rounding != 0) {{
+                    result += zero_point;
+                }}
                 if (result < activation_min) {{
                     result = activation_min;
                 }} else if (result > activation_max) {{
@@ -390,21 +404,25 @@ def _global_average_kernel(context: StepEmitContext) -> KernelEmission:
         key="cortex_m4_global_average_pool2d_s8_v1",
         header_includes=("<stddef.h>", "<stdint.h>"),
         declaration=f"""void {function}(
-    const int8_t *, int8_t *, size_t, size_t, int32_t, int32_t, int32_t);""",
+    const int8_t *, int8_t *, size_t, size_t, int32_t, int32_t, int32_t, int32_t);""",
         definition=f"""void {function}(
     const int8_t *input, int8_t *output, size_t positions, size_t channels,
-    int32_t zero_point, int32_t activation_min, int32_t activation_max) {{
+    int32_t zero_point, int32_t center_before_rounding,
+    int32_t activation_min, int32_t activation_max) {{
     for (size_t channel = 0; channel < channels; ++channel) {{
         int32_t accumulator = 0;
         for (size_t position = 0; position < positions; ++position) {{
-            accumulator += (int32_t)input[position * channels + channel] - zero_point;
+            accumulator += (int32_t)input[position * channels + channel];
+        }}
+        if (center_before_rounding != 0) {{
+            accumulator -= zero_point * (int32_t)positions;
         }}
         const uint32_t magnitude = accumulator < 0
             ? (uint32_t)(-(int64_t)accumulator) : (uint32_t)accumulator;
         const uint32_t rounded =
             (magnitude + (uint32_t)positions / 2u) / (uint32_t)positions;
-        int32_t result = (accumulator < 0 ? -(int32_t)rounded : (int32_t)rounded)
-            + zero_point;
+        int32_t result = accumulator < 0 ? -(int32_t)rounded : (int32_t)rounded;
+        if (center_before_rounding != 0) result += zero_point;
         if (result < activation_min) result = activation_min;
         else if (result > activation_max) result = activation_max;
         output[channel] = (int8_t)result;
@@ -464,7 +482,11 @@ def _call(
     kernel_h, kernel_w = step.kernel
     stride_h, stride_w = step.stride
     pad_top, _, pad_left, _ = step.padding
-    qparam_line = f"        {input_qparams.zero_point},\n" if average else ""
+    if average:
+        centered = int(step.arithmetic_profile == AVERAGE_POOL_PROFILE_BAKENN_V1)
+        qparam_line = f"        {input_qparams.zero_point}, {centered},\n"
+    else:
+        qparam_line = ""
     return (
         f"    {function}(\n"
         f"        {context.pointer(step.input, mutable=False)},\n"
@@ -513,7 +535,9 @@ def _emit_average_pool(step: AveragePool2DStep, context: StepEmitContext) -> Ste
             f"    {function}({context.pointer(step.input, mutable=False)}, "
             f"{context.pointer(step.output, mutable=True)}, "
             f"{input_type.shape[1] * input_type.shape[2]}u, {input_type.shape[3]}u, "
-            f"{qparams.zero_point}, {step.activation_min}, {step.activation_max});"
+            f"{qparams.zero_point}, "
+            f"{int(step.arithmetic_profile == AVERAGE_POOL_PROFILE_BAKENN_V1)}, "
+            f"{step.activation_min}, {step.activation_max});"
         )
         kernel = _global_average_kernel(context)
     elif implementation == _PORTABLE_AVERAGE_ID:
@@ -532,6 +556,7 @@ def _emit_average_pool(step: AveragePool2DStep, context: StepEmitContext) -> Ste
             "input": step.input,
             "output": step.output,
             "accumulator_bound": step.accumulator_bound,
+            "arithmetic_profile": step.arithmetic_profile,
         },
     )
 

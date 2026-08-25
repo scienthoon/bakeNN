@@ -16,6 +16,13 @@
  * limitations under the License.
  */
 
+/*
+ * Modified by the BakeNN project from CMSIS-NN 4.0.0
+ * (ca5dc34313be2ee5c46652917c30baac96c52621): restrict the GCC-only
+ * optimize attribute so Clang and Arm Compiler builds remain portable.
+ * See BAKENN_PROVENANCE.md for the upstream and patched file hashes.
+ */
+
 /* ----------------------------------------------------------------------
  * Project:      CMSIS NN Library
  * Title:        arm_depthwise_conv_s8.c

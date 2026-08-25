@@ -12,7 +12,12 @@ from bakenn.backend.portable_c import generate_portable_c
 import bakenn.backend.portable_c.families.pool  # noqa: F401 - installs emitter registrations
 from bakenn.errors import GraphValidationError
 from bakenn.ir import DType, Layout, PerTensorQParams, QuantizedGraph, TensorType, verify_graph
-from bakenn.ir.ops.pool import AveragePool2DOp, MaxPool2DOp
+from bakenn.ir.ops.pool import (
+    AVERAGE_POOL_PROFILE_BAKENN_V1,
+    AVERAGE_POOL_PROFILE_TFLITE_RAW_V1,
+    AveragePool2DOp,
+    MaxPool2DOp,
+)
 import bakenn.ir.verifiers.pool  # noqa: F401 - installs verifier registrations
 from bakenn.plan import lower_to_plan
 import bakenn.plan.lowering.pool  # noqa: F401 - installs lowering registrations
@@ -30,9 +35,15 @@ def _graph(
     padding: tuple[int, int, int, int] = (1, 0, 1, 0),
     input_qparams: PerTensorQParams | None = None,
     output_qparams: PerTensorQParams | None = None,
+    arithmetic_profile: str | None = None,
 ) -> QuantizedGraph:
     input_qparams = input_qparams or PerTensorQParams(0.125, 3)
     output_qparams = output_qparams or input_qparams
+    op_kwargs: dict[str, object] = {}
+    if arithmetic_profile is not None:
+        if op_type is not AveragePool2DOp:
+            raise ValueError("arithmetic_profile is only valid for AveragePool2D")
+        op_kwargs["arithmetic_profile"] = arithmetic_profile
     return QuantizedGraph(
         name=f"test_{op_type.__name__}",
         values={
@@ -40,7 +51,7 @@ def _graph(
             "output": TensorType(output_shape, DType.INT8, Layout.NHWC, output_qparams),
         },
         constants={},
-        ops=(op_type("pool", "input", "output", kernel, stride, padding),),
+        ops=(op_type("pool", "input", "output", kernel, stride, padding, **op_kwargs),),
         inputs=("input",),
         outputs=("output",),
     )
@@ -121,6 +132,51 @@ def test_average_pool_padding_valid_count_and_negative_ties_hand_golden() -> Non
     )
     assert _round_divide_half_away(-3, 2) == -2
     assert _round_divide_half_away(3, 2) == 2
+
+
+@pytest.mark.parametrize(
+    ("profile", "expected_code"),
+    [
+        (AVERAGE_POOL_PROFILE_BAKENN_V1, 0),
+        (AVERAGE_POOL_PROFILE_TFLITE_RAW_V1, 1),
+    ],
+)
+def test_average_pool_versioned_half_tie_profiles_are_python_c_exact(
+    tmp_path: Path,
+    profile: str,
+    expected_code: int,
+) -> None:
+    graph = _graph(
+        AveragePool2DOp,
+        input_shape=(1, 1, 2, 1),
+        output_shape=(1, 1, 1, 1),
+        kernel=(1, 2),
+        stride=(1, 2),
+        padding=(0, 0, 0, 0),
+        input_qparams=PerTensorQParams(1.0, 1),
+        arithmetic_profile=profile,
+    )
+    plan = lower_to_plan(graph)
+    input_codes = np.asarray([[[[0], [1]]]], dtype=np.int8)
+    expected = np.asarray([[[[expected_code]]]], dtype=np.int8)
+    np.testing.assert_array_equal(run_reference(plan, input_codes), expected)
+
+    artifacts = generate_portable_c(plan, tmp_path / profile.replace(".", "_"))
+    np.testing.assert_array_equal(_run_generated(artifacts, input_codes), expected.reshape(-1))
+    manifest = json.loads(artifacts.manifest.read_text(encoding="utf-8"))
+    assert manifest["operations"][0]["arithmetic_profile"] == profile
+
+
+def test_average_pool_rejects_unknown_arithmetic_profile() -> None:
+    with pytest.raises(ValueError, match="unsupported AveragePool2D arithmetic profile"):
+        AveragePool2DOp(
+            "pool",
+            "input",
+            "output",
+            kernel=(1, 1),
+            stride=(1, 1),
+            arithmetic_profile="unknown.average_pool.v0",
+        )
 
 
 @pytest.mark.parametrize("op_type", [AveragePool2DOp, MaxPool2DOp])

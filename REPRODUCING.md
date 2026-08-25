@@ -1,4 +1,4 @@
-# Reproducing BakeNN 0.1 results
+# Reproducing BakeNN 1.0 results
 
 This document separates host correctness tests, boardless target builds and
 physical performance measurements.  A cross-build proves that an artifact
@@ -16,11 +16,11 @@ The two evidence classes have separate indexes:
 ```bash
 git clone https://github.com/scienthoon/bakeNN.git
 cd bakeNN
-git checkout v0.1.0
+git checkout v1.0.0
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
-python -m pip install ".[test,torch]"
+python -m pip install ".[test,torch,tflite,tflite-verify]"
 python -m pytest -q
 ```
 
@@ -39,7 +39,7 @@ shasum -a 256 dist/*.whl dist/*.tar.gz
 ```
 
 Install the wheel into a fresh environment outside the checkout, import
-`bakenn`, assert `bakenn.__version__ == "0.1.0"`, compile the smoke graph, and
+`bakenn`, assert `bakenn.__version__ == "1.0.0"`, compile the smoke graph, and
 compile the emitted C with the host compiler.  The release workflow performs
 the same build once, publishes those exact files to PyPI through OIDC, and
 attaches them and their checksums to the GitHub release.
@@ -48,7 +48,7 @@ attaches them and their checksums to the GitHub release.
 
 ```bash
 python scripts/build_release_evidence.py \
-  --output dist/bakenn-0.1.0-evidence.zip
+  --output dist/bakenn-1.0.0-evidence.zip
 ```
 
 The archive contains checked-in JSON/Markdown/UART evidence, the benchmark
@@ -57,13 +57,18 @@ commit.  A release operator may additionally include exact local ELF/map files:
 
 ```bash
 python scripts/build_release_evidence.py \
-  --output dist/bakenn-0.1.0-evidence.zip \
+  --output dist/bakenn-1.0.0-evidence.zip \
   --artifact nrf52840-bakenn-cmsis.elf=/path/to/zephyr.elf \
   --artifact nrf52840-bakenn-cmsis.map=/path/to/zephyr.map
 ```
 
 An absent physical artifact is reported as absent; the script never invents a
-measurement or substitutes a host result.
+measurement or substitutes a host result.  The nRF52840 and original-ESP32
+measurements currently retain their reports, hashes and UART/size logs, but not
+the exact measured ELF/map/app-binary bytes.  `MANIFEST.json` records these
+historical omissions structurally.  A local rebuild with a different digest is
+new cross-build evidence, not a replacement for the historical physical
+artifact.
 
 ## Trained MNIST evidence and replay
 
@@ -105,10 +110,15 @@ idf.py build
 idf.py size
 ```
 
-This is still cross-build evidence. It becomes physical evidence only after
-`idf.py -p PORT flash monitor` produces a transcript containing 100 samples,
-99 correct classifications, 1,000 compared bytes, zero mismatches, output
-FNV-1a `0x55fb9e60`, cycles and the four expected provenance hashes.
+Running only through `idf.py build` is cross-build evidence. A physical run has
+now also been checked in: it contains 100 samples, 99 correct classifications,
+1,000 compared bytes, zero mismatches, output FNV-1a `0x55fb9e60`, 101 measured
+cycle values, a stack high-water reading and the four expected provenance
+hashes. See
+[`benchmarks/esp32/results/mnist_trained_esp32.md`](benchmarks/esp32/results/mnist_trained_esp32.md)
+and its adjacent raw UART and size transcripts. Re-running the commands above
+creates new evidence and must record the new board/toolchain/artifact identity;
+it does not inherit the checked-in result automatically.
 
 ## microTVM AOT+USMP+CMSIS-NN baseline
 

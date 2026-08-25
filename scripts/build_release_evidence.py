@@ -21,7 +21,6 @@ FIXED_FILES = (
     "REPRODUCING.md",
     "STABILITY.md",
     "THIRD_PARTY_NOTICES.md",
-    ".github/release-notes/v0.1.0.md",
     "docs/CLEAN_ROOM_REPRODUCTION.md",
     "docs/COMPARISON.md",
     "docs/SUBMISSION_P0_STATUS.md",
@@ -38,6 +37,30 @@ EVIDENCE_DIRECTORIES = (
     "benchmarks/cross_build/results",
     "benchmarks/microtvm_compare/results",
     "examples/mnist/evidence",
+)
+
+# These measurements predate the v1 evidence-archive contract.  Their reports,
+# raw UART transcripts and recorded digests are retained in the repository, but
+# the exact linked binaries were not.  A later local rebuild is not equivalent
+# evidence, even when it uses the same source and toolchain.
+HISTORICAL_ARTIFACT_LIMITATIONS = (
+    {
+        "benchmark_scope": "FIT IoT-LAB nRF52840 experiments 447609 and 447626",
+        "missing": ("exact linked ELF bytes", "original linker map files"),
+        "retained": ("reports", "recorded ELF SHA-256 values", "raw UART"),
+        "reason": "the original linked binaries and map files were not archived",
+    },
+    {
+        "benchmark_scope": "original ESP32 trained-MNIST and MobileNetV2 physical runs",
+        "missing": ("exact linked ELF bytes", "original linker map files", "exact app binary bytes"),
+        "retained": (
+            "reports",
+            "recorded artifact SHA-256 values",
+            "raw UART",
+            "size output",
+        ),
+        "reason": "the measured build outputs were not checked in or attached to a release",
+    },
 )
 
 
@@ -75,7 +98,11 @@ def _archive_name(label: str) -> str:
 
 def _tracked_evidence() -> dict[str, bytes]:
     entries: dict[str, bytes] = {}
-    for relative in FIXED_FILES:
+    fixed_files = list(FIXED_FILES)
+    release_notes = f".github/release-notes/v{_version().removesuffix('.dev0')}.md"
+    if (REPOSITORY / release_notes).is_file():
+        fixed_files.append(release_notes)
+    for relative in fixed_files:
         path = REPOSITORY / relative
         if not path.is_file():
             raise FileNotFoundError(path)
@@ -115,17 +142,34 @@ def build_archive(output: Path, artifact_specs: tuple[str, ...]) -> tuple[Path, 
 
     commit = _git("rev-parse", "HEAD")
     tag = _git("tag", "--points-at", "HEAD").splitlines()
-    dirty = bool(_git("status", "--porcelain"))
+    # Ignored build/dist outputs do not appear here, but every non-ignored
+    # untracked source or evidence file must make the provenance dirty.
+    dirty = bool(_git("status", "--porcelain", "--untracked-files=all"))
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "bakenn_version": _version(),
         "source_commit": commit,
         "source_tags": sorted(value for value in tag if value),
         "working_tree_dirty": dirty,
         "scope": (
             "Checked-in physical benchmark reports and explicitly supplied "
-            "binary/linker artifacts; missing metrics remain unmeasured."
+            "binary/linker artifacts. A recorded hash does not substitute for "
+            "missing artifact bytes; missing metrics remain unmeasured."
         ),
+        "artifact_completeness": {
+            "exact_external_artifacts_supplied": bool(external),
+            "historical_missing_artifacts": [
+                {
+                    key: list(value) if isinstance(value, tuple) else value
+                    for key, value in limitation.items()
+                }
+                for limitation in HISTORICAL_ARTIFACT_LIMITATIONS
+            ],
+            "future_measurement_rule": (
+                "Pass every exact physical ELF, map, binary and raw device log "
+                "with --artifact when building the release evidence archive."
+            ),
+        },
         "external_artifacts": external,
         "files": [
             {"path": name, "bytes": len(data), "sha256": _sha256(data)}

@@ -9,7 +9,11 @@ permissions:
   contents: read
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,6 +27,7 @@ jobs:
         run: |
           version="$(python -c 'from pathlib import Path; import re; print(re.search(r"VERSION = \"([^\"]+)\"", Path("src/bakenn/_version.py").read_text()).group(1))')"
           test "${GITHUB_REF_NAME}" = "v${version}"
+          test -f ".github/release-notes/${GITHUB_REF_NAME}.md"
       - name: Build distributions
         run: |
           python -m pip install --upgrade build twine
@@ -37,13 +42,19 @@ jobs:
           cd /tmp
           /tmp/bakenn-release-venv/bin/python -c 'import os, bakenn; expected = os.environ["GITHUB_REF_NAME"].removeprefix("v"); assert bakenn.__version__ == expected, (bakenn.__version__, expected); print(bakenn.__file__)'
           /tmp/bakenn-release-venv/bin/python "${GITHUB_WORKSPACE}/examples/targets/generate_smoke.py" --target portable32 --output /tmp/bakenn-release-smoke
-          cc -std=c11 -Wall -Wextra -Werror -pedantic -c /tmp/bakenn-release-smoke/generated/bknn_target_smoke.c -o /tmp/bakenn-release-smoke/model.o
+          for unit in bknn_target_smoke bknn_target_smoke_weights bknn_target_smoke_kernels; do
+            cc -std=c11 -Wall -Wextra -Werror -pedantic \
+              -I /tmp/bakenn-release-smoke/generated \
+              -c "/tmp/bakenn-release-smoke/generated/${unit}.c" \
+              -o "/tmp/bakenn-release-smoke/${unit}.o"
+          done
       - name: Build evidence and checksums
         shell: bash
         run: |
           python scripts/build_release_evidence.py --output "dist/bakenn-${GITHUB_REF_NAME#v}-evidence.zip"
+          python scripts/build_sbom.py --output "dist/bakenn-${GITHUB_REF_NAME#v}.cdx.json"
           cd dist
-          sha256sum *.whl *.tar.gz *-evidence.zip > SHA256SUMS
+          sha256sum *.whl *.tar.gz *-evidence.zip *.cdx.json > SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: python-distributions
@@ -57,6 +68,7 @@ jobs:
           path: |
             dist/*-evidence.zip
             dist/*-evidence.zip.sha256
+            dist/*.cdx.json
             dist/SHA256SUMS
           if-no-files-found: error
 

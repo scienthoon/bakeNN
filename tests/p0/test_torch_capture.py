@@ -459,8 +459,14 @@ class TorchExportCaptureTests(unittest.TestCase):
             def forward(self, x):  # type: ignore[no-untyped-def]
                 return torch.sin(x)
 
-        with self.assertRaisesRegex(CompileError, "unsupported torch.export operator aten.sin.default"):
+        with self.assertRaisesRegex(
+            CompileError, "unsupported torch.export operator aten.sin.default"
+        ) as context:
             capture_torch_export(Unsupported().eval(), torch.randn(1, 4))
+        self.assertEqual(context.exception.code, "BAKENN_TORCH_OPERATOR_UNSUPPORTED")
+        self.assertEqual(context.exception.stage, "torch_export")
+        self.assertTrue(context.exception.location)
+        self.assertEqual(len(context.exception.suggestions), 2)
 
     def test_static_channel_broadcast_scalar_mul_rejection_and_grouped_conv(self) -> None:
         class BroadcastAdd(nn.Module):

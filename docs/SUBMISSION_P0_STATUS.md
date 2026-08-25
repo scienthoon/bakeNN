@@ -25,6 +25,9 @@ reproducible; it does not turn a boardless result into a physical measurement.
   cross-linked ELF resource sizes, and 1,000-byte output agreement.
 - [x] Integrate the results and evidence boundaries into the competition DOCX
   and PDF report.
+- [x] Measure the frozen trained-MNIST full model on a physical original ESP32,
+  retaining the 100-image UART transcript, 101 cycle samples, stack watermark,
+  ELF/map sizes and provenance hashes under `benchmarks/esp32/results/`.
 
 ## External gates that cannot be self-certified
 
@@ -32,10 +35,5 @@ reproducible; it does not turn a boardless result into a physical measurement.
   author must clone the public repository, run the verifier, and submit the
   resulting JSON in a pull request. Instructions and a PR-ready template are in
   `docs/CLEAN_ROOM_REPRODUCTION.md` and `reproductions/README.md`.
-- [ ] **Trained-MNIST physical benchmark.** The ESP32 project, fixed 100-image
-  corpus, expected output, hashes, and acceptance line are ready, but the UART
-  transcript, device cycles, and stack watermark must come from an actual
-  board run before this result may appear in the physical benchmark table.
-
-These two boxes are deliberately not replaceable by a local simulation,
-cross-build, or a pull request authored by the maintainer.
+The remaining independent-reproduction box is deliberately not replaceable by
+a local simulation, cross-build, or a pull request authored by the maintainer.

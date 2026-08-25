@@ -1,8 +1,9 @@
 # BakeNN target layer
 
 Status: ARM/RISC-V cross-link path host-verified; ESP-IDF packaging implemented;
-first physical nRF52840/Cortex-M4 FC and standalone Conv evidence recorded;
-other targets and full peak-resource claims remain unmeasured
+physical nRF52840/Cortex-M4 FC and standalone Conv evidence plus original-ESP32
+trained MNIST and MobileNetV2 evidence recorded; other targets and full
+peak-resource claims remain explicitly scoped or unmeasured
 
 BakeNN keeps numerical semantics separate from target lowering:
 
@@ -26,13 +27,17 @@ It may not change tensor qparams, rounding, operator order, or liveness.
 | `cortex-m0plus` | ARMv6-M, GNU Arm Embedded | freestanding ELF link and symbol audit |
 | `cortex-m4` | ARMv7E-M/DSP, GNU Arm Embedded | intrinsic-kernel ELF, `smlad` disassembly and symbol audit |
 | `rv32imc` | RISC-V I/M/C ILP32, GNU Embedded | freestanding ELF link and symbol audit |
-| `esp32` | Xtensa LX6, ESP-IDF | component/project generation; CI build configured |
-| `esp32s3` | Xtensa LX7/vector, ESP-IDF | component/project generation; CI build configured |
-| `esp32c3` | ESP RISC-V, ESP-IDF | component/project generation; CI build configured |
+| `esp32` | Xtensa LX6, ESP-IDF | CI build plus physical trained-MNIST and MobileNetV2 evidence |
+| `esp32s3` | Xtensa LX7/vector, ESP-IDF | ESP-NN component/project CI; no physical result yet |
+| `esp32c3` | ESP RISC-V, ESP-IDF | portable-fallback component/project CI |
 
-The ESP profiles do not yet select ESP-NN, assembly, or vector kernels. Their
-generated model code remains the same verified C11 semantics with target
-alignment and ESP-IDF packaging.
+ESP-NN is optional and selected only when explicitly enabled with a non-portable
+kernel policy and all capability predicates hold. Original ESP32 currently uses
+optimized ESP-NN Conv/Depthwise paths while unsupported FC/pool cases fall back
+to portable C. ESP32-S3 can select its pinned Conv, Depthwise, per-channel FC
+and pooling source closures; ESP32-C3 intentionally remains portable because
+the pinned ESP-NN revision has no matching optimized C3 contract. Every fallback
+preserves the same verified INT8 semantics and is recorded in the manifest.
 
 The Cortex-M4 profile can select versioned `SMLAD` Linear, 1x1 Conv, depthwise
 3x3 and im2col 3x3 Conv kernels plus specialized global-average and 2x2
@@ -110,9 +115,22 @@ energy, cache behaviour, or physical peak stack usage.
 
 `KernelCostMeasurement` accepts only positive cycle counts with a kernel id,
 workload, exact toolchain/flags, and evidence reference. All built-in targets
-currently contain zero entries. `AUTO` therefore remains a deterministic
-capability selection, not a measured per-target fastest-kernel policy.
+currently contain zero entries.
+
+`PORTABLE` is the default and excludes optimized candidates.
+`STATIC_PRIORITY` is an explicit capability-priority mode: it chooses the
+highest-priority supported candidate but makes no physical performance claim.
+`MEASURED` considers a cost only when kernel ID, canonical workload, exact
+target descriptor, toolchain, and compiler flags match; if no exact entry is
+available, it selects portable C. `AUTO` is deprecated and retained only as an
+alias for `STATIC_PRIORITY`; it is not a fastest-kernel mode.
 
 Never copy host timings, datasheet estimates, or another MCU's numbers into a
 target cost table. Physical target measurements are the gate for enabling a
 target-specific kernel by default.
+
+Cross-building an ELF or ESP-IDF project proves only the declared compiler,
+link, symbol, and section-size properties. Physical cycle, latency, stack, and
+energy evidence stays in the separate physical-board index and is scoped to
+the exact board, firmware, toolchain, flags, and workload; cross-build records
+must not be promoted into a measured cost table.

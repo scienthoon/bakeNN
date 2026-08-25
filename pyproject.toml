@@ -12,12 +12,14 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 keywords = ["int8", "aot-compiler", "microcontroller", "pytorch", "embedded-ml"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Software Development :: Compilers",
 ]
@@ -30,13 +32,17 @@ Issues = "https://github.com/scienthoon/bakeNN/issues"
 Changelog = "https://github.com/scienthoon/bakeNN/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-torch = ["torch>=2.3,<2.11"]
+torch = ["torch>=2.9,<2.11"]
+tflite = ["flatbuffers>=23,<26", "tflite>=2.18,<3"]
+tflite-verify = ["ai-edge-litert>=2.2,<3"]
+model-zoo = ["torch>=2.9,<2.11", "torchvision>=0.24,<0.26"]
 test = ["pytest>=8"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
+"bakenn" = ["py.typed"]
 "bakenn.backend.cmsis_nn.vendor" = [
   "cmsis_nn/Include/*.h",
   "cmsis_nn/Source/ConvolutionFunctions/*.c",

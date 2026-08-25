@@ -1,61 +1,88 @@
 # Stability policy
 
-BakeNN 0.1.x is alpha software.  The compiler is usable for the documented
-static INT8 contract, but the Python API and generated artifact layout have not
-reached 1.0 compatibility guarantees.
+BakeNN is currently `1.0.0.dev0`: the v1 P0 implementation is in progress and
+has not yet been published as the final 1.0 release. This document freezes the
+compatibility contract targeted by that release without presenting unfinished
+roadmap items as released features.
 
-## Compatibility tiers
+## Versioned deployment contracts
 
-### Versioned numerical contracts
+BakeNN follows semantic versioning for its public Python API and the following
+independently versioned deployment contracts:
 
-The following identifiers describe deployment semantics rather than an
-implementation detail.  BakeNN will not silently change their arithmetic:
-
-- `bakenn.int8.v1` for Q31 requantization and integer operator behavior;
-- `bakenn.softmax_lut.q15.v1` for the current Softmax LUT contract;
-- `bakenn.int8.resize_bilinear.q15.v1` for bilinear resize coordinates and
-  rounding;
+- generated C ABI version `1` (`BKNN_C_ABI_VERSION`);
+- generated manifest schema version `4`
+  (`BKNN_MANIFEST_SCHEMA_VERSION`);
+- arithmetic profile `bakenn.int8.v1`, plus the separately versioned
+  `bakenn.softmax_lut.q15.v1` and
+  `bakenn.int8.resize_bilinear.q15.v1` numerical contracts, and the
+  TFLite-compatible AveragePool profile
+  `tflite.int8.average_pool2d.raw_code.v1`;
 - versioned kernel implementation and packed-layout IDs recorded in manifests.
 
-A future incompatible numerical rule receives a new identifier.  Within the
-same identifier, the Python integer reference, portable C and every enabled
-optimized backend must remain byte-exact.
+Within the BakeNN 1.x line, a compatible update does not silently change the
+meaning of C ABI v1, manifest schema v4, or an existing numerical-profile ID.
+An incompatible C calling convention or public Python API requires a major
+release. An incompatible manifest or arithmetic change also receives a new
+schema/profile identifier; readers reject identifiers they do not implement.
+Adding a new profile or kernel ID is not permission to reinterpret an old one.
 
-### Public Python API
+Patch releases preserve these public contracts while fixing defects. Minor
+releases may add backward-compatible Python API, kernel IDs, packing IDs, or an
+opt-in numerical profile, but C ABI v1 and manifest schema v4 remain the v1
+defaults. Removing either contract, making an incompatible schema/profile
+mandatory, or dropping an existing public profile requires a major release.
 
-Top-level functions documented in the README are the intended 0.1 public API,
-but pre-1.0 minor releases may rename or reorganize them with changelog and
-migration notes.  Internal modules under `bakenn.ir`, `bakenn.plan`, backend
-families and frontend capture types are compiler internals unless explicitly
-documented otherwise.
+The Python integer reference, portable C, and every enabled optimized backend
+must remain byte-exact for the same accepted numerical profile. Numerical
+equivalence does not imply that generated source bytes, memory offsets, packed
+constants, or kernel choices remain identical across compiler releases.
 
-### Generated C and manifests
+## Model recompilation policy
 
-Generated symbols use `bknn_`/`BKNN_`, but exact filenames, helper names,
-manifest fields, memory-plan offsets and selected kernels may change between
-minor releases.  Recompile the model when upgrading BakeNN.  Do not link C
-artifacts produced by different BakeNN versions into one ABI contract unless
-their public headers are independently reviewed.
+Generated libraries are standalone artifacts rather than a target runtime
+loaded by BakeNN. A previously validated artifact can remain deployed as-is;
+installing a newer host compiler does not mutate it. Recompile and revalidate
+the model whenever the model, input shape, qparams/calibration, target,
+toolchain or flags, kernel policy, or compiler version used for a new firmware
+release changes. Recompilation is also required to pick up a compiler
+correctness or security fix.
 
-## Intentional product constraints
+Do not combine generated sources, headers, manifests, or packed constants from
+different compilations. Consumers should check the emitted ABI, manifest
+schema, arithmetic-profile ID/version, and artifact hashes before accepting a
+generated set. Schema-v4 manifests also carry a canonical payload digest, so a
+consumer can reject metadata that was altered independently of the inventoried
+generated files.
+
+## Public Python API
+
+The top-level functions and types documented in the README are the intended v1
+public API. Internal modules under `bakenn.ir`, `bakenn.plan`, backend
+families, and frontend capture types remain compiler internals unless
+explicitly documented. During `1.0.0.dev0`, the final release can still
+receive documented corrections; after 1.0, incompatible public API changes
+follow the major-version rule above.
+
+## Intentional v1 product constraints
 
 BakeNN targets firmware in which the MCU and model are fixed, the model is
 linked into the application, and model replacement ships with a firmware
-rebuild.  The following are intentional 0.1 constraints:
+rebuild. The following are deliberate v1 constraints:
 
 - batch size one and fully static shapes;
 - one public model input and one public model output;
-- no runtime model loader, dynamic tensor allocation or target-side float
+- no runtime model loader, dynamic tensor allocation, or target-side float
   fallback;
-- a narrower fail-closed operator surface than TFLite Micro.
+- a narrower, fail-closed operator surface than TFLite Micro.
 
 Internal graphs may still contain residual branches, concatenation, SE
-broadcast operations and other multi-input nodes.  The single-input/output
+broadcast operations, and other multi-input nodes. The single-input/output
 constraint applies to the public firmware ABI.
 
 ## Support window
 
-Security and correctness fixes are applied to the latest 0.1.x release and
-`main`.  Older alpha snapshots are not maintained.  Report security issues via
-[SECURITY.md](SECURITY.md) and compatibility requests using the repository's
-issue templates.
+Security and correctness fixes are applied to the latest supported 1.x release
+and `main`. Development snapshots are not maintained as separate release
+lines. Report security issues via [SECURITY.md](SECURITY.md) and compatibility
+requests using the repository's issue templates.

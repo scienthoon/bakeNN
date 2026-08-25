@@ -69,7 +69,7 @@ def _compile_pair(
         tmp_path / f"{prefix}_optimized",
         model_name=f"{prefix}_optimized",
         backend_options=bakenn.CBackendOptions(
-            kernel_policy=bakenn.KernelPolicy.AUTO
+            kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY
         ),
     )
     runner = tmp_path / f"{prefix}_runner.c"
@@ -141,7 +141,7 @@ def test_optimized_linear_is_python_and_portable_c_bit_exact(
         graph,
         tmp_path / "optimized",
         model_name="linear_optimized",
-        backend_options=bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO),
+        backend_options=bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY),
     )
     assert portable.plan is not optimized.plan
     assert portable.plan.steps == optimized.plan.steps
@@ -220,7 +220,7 @@ def test_optimized_linear_tail_is_python_and_portable_c_bit_exact(
         graph,
         tmp_path / "optimized",
         model_name="linear_tail_optimized",
-        backend_options=bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO),
+        backend_options=bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY),
     )
     assert optimized.artifacts.backend_plan.selections[0].kernel_id == (
         "optimized.linear_oi2_tail.v1"

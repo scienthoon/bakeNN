@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 import bakenn
+from bakenn.artifacts import load_manifest
 from bakenn.errors import CompileError
 from bakenn.targets import (
     CORTEX_M0PLUS,
@@ -163,7 +164,10 @@ def test_esp_idf_project_is_self_contained_and_target_checked(
     assert project.target is target
     assert (project.root / "CMakeLists.txt").is_file()
     assert (project.root / "sdkconfig.defaults").is_file()
-    assert (project.component / compiled.artifacts.header.name).is_file()
+    assert (project.component / "generated" / compiled.artifacts.header.name).is_file()
+    load_manifest(
+        project.component / "generated" / compiled.artifacts.manifest.name
+    )
     assert "idf_component_register" in (project.component / "CMakeLists.txt").read_text()
     runner = (project.main / "main.c").read_text(encoding="utf-8")
     assert "esp_cpu_get_cycle_count" in runner

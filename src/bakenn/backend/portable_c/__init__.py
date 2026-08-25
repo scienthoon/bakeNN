@@ -15,6 +15,7 @@ from .selection import (
     KernelPolicy,
     KernelSelection,
     PackedConstant,
+    canonical_workload_key,
     kernel_capabilities,
     select_backend_plan,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "StepEmission",
     "emit_step",
     "generate_portable_c",
+    "canonical_workload_key",
     "kernel_capabilities",
     "select_backend_plan",
 ]

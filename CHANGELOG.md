@@ -3,6 +3,28 @@
 All notable changes are recorded here. BakeNN follows semantic versioning once
 its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 
+## 1.0.0 - Unreleased
+
+### Added
+
+- strict optional host-side import of supported fully-quantized static INT8
+  TFLite models into the existing typed IR;
+- a separately versioned TFLite raw-code AveragePool profile, gated byte for
+  byte against LiteRT's built-in reference implementation;
+- versioned public C/C++ firmware ABI and manifest validation;
+- transactional generated-artifact publication with content inventories and
+  provenance hashes, including manifest-payload self-integrity;
+- explicit measured versus static-priority kernel-selection policies;
+- 1.0 release gates for the supported Python, PyTorch, model and target matrix.
+
+### Changed
+
+- backend selection no longer changes PTQ weight granularity implicitly;
+- vendored CMSIS-NN compatibility changes now carry per-file notices and exact
+  upstream/patched provenance;
+- stable APIs, numerical profiles and generated artifact schemas follow the
+  compatibility policy in `STABILITY.md`.
+
 ## 0.1.0 - 2026-08-16
 
 ### Added

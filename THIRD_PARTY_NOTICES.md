@@ -15,6 +15,10 @@ contain pinned, redistributable subsets of the following upstream projects.
 
 BakeNN packages only the source closure needed by selected FullyConnected,
 Conv2D, DepthwiseConv2D, AveragePool2D and MaxPool2D kernels.
+Four copied CMSIS-NN files contain documented freestanding/compiler
+compatibility changes and one BakeNN support source is added. Exact upstream
+and patched hashes, purposes, and modification notices are recorded in
+`src/bakenn/backend/cmsis_nn/vendor/cmsis_nn/BAKENN_PROVENANCE.md`.
 
 ## CMSIS-Core
 
@@ -45,12 +49,13 @@ directory.
 
 ## Development and benchmark dependencies
 
-PyTorch, torchvision, TensorFlow Lite/LiteRT Micro, FlatBuffers, Zephyr and
-ESP-IDF are not copied into the BakeNN runtime library.  They are optional host
+PyTorch, torchvision, TensorFlow Lite/LiteRT, FlatBuffers, Zephyr and ESP-IDF
+are not copied into generated target artifacts. They are optional host
 frontend, test, comparison or target-build dependencies and retain their own
-licenses.  A generated portable C model does not depend on them.  TFLite files
-under the comparison harness are generated solely for matched benchmark runs;
-TFLite is not a BakeNN frontend or deployment dependency.
+licenses. The strict TFLite importer uses the optional host schema and
+FlatBuffers packages, while LiteRT is used only as an external differential
+oracle. Generated portable C has no TFLite, FlatBuffers or interpreter
+dependency.
 
 Generated target artifacts copy the applicable third-party license next to the
 selected source closure.  The wheel and source distribution also include the

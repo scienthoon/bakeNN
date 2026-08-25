@@ -695,7 +695,7 @@ def main() -> int:
     evidence, model, calibration, raw_images, labels = _load_frozen_inputs(args.evidence_dir)
 
     options = bakenn.CBackendOptions(
-        kernel_policy=bakenn.KernelPolicy.AUTO,
+        kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
         enable_cmsis_nn=True,
         target=CORTEX_M4,
     )

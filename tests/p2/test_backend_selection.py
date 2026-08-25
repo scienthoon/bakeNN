@@ -15,6 +15,7 @@ from bakenn.backend.portable_c import (
     StepEmitContext,
     select_backend_plan,
 )
+from bakenn.backend.portable_c.selection import canonical_workload_key
 from bakenn.errors import CompileError
 from bakenn.ir import (
     DType,
@@ -27,6 +28,7 @@ from bakenn.ir import (
 )
 from bakenn.plan import lower_to_plan
 from bakenn.ir.types import TARGET_SIZE_MAX
+from bakenn.targets import CORTEX_M4, KernelCostMeasurement
 
 
 def linear_graph(input_count: int = 12, output_count: int = 6) -> QuantizedGraph:
@@ -66,14 +68,16 @@ def linear_graph(input_count: int = 12, output_count: int = 6) -> QuantizedGraph
     )
 
 
-def test_portable_is_default_and_auto_selects_deterministic_packed_linear() -> None:
+def test_portable_is_default_and_static_priority_selects_deterministic_packed_linear() -> None:
     plan = lower_to_plan(linear_graph())
     portable = select_backend_plan(plan)
     assert portable.selections[0].kernel_id == "portable.linear_s8.v1"
     assert not portable.selections[0].optimized
     assert not portable.packed_constants
 
-    options = bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO)
+    options = bakenn.CBackendOptions(
+        kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY
+    )
     first = select_backend_plan(plan, options)
     second = select_backend_plan(plan, options)
     selection = first.selections[0]
@@ -92,14 +96,161 @@ def test_portable_is_default_and_auto_selects_deterministic_packed_linear() -> N
     np.testing.assert_array_equal(plan.constants["weight"], linear_graph().constants["weight"])
 
 
-def test_auto_falls_back_for_small_linear_and_require_optimized_fails_closed() -> None:
-    plan = lower_to_plan(linear_graph(3, 5))
-    auto = select_backend_plan(
-        plan, bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO)
+def test_auto_is_a_deprecated_compatibility_spelling_for_static_priority() -> None:
+    plan = lower_to_plan(linear_graph())
+    with pytest.warns(DeprecationWarning, match="STATIC_PRIORITY"):
+        auto_options = bakenn.CBackendOptions(
+            kernel_policy=bakenn.KernelPolicy.AUTO
+        )
+    auto = select_backend_plan(plan, auto_options)
+    explicit = select_backend_plan(
+        plan,
+        bakenn.CBackendOptions(
+            kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY
+        ),
     )
-    assert auto.selections[0].kernel_id == "portable.linear_s8.v1"
-    assert "optimized.linear_oi2.v1" in auto.selections[0].rejected
-    assert "optimized.linear_oi2_tail.v1" in auto.selections[0].rejected
+    assert auto.selections[0].kernel_id == explicit.selections[0].kernel_id
+    assert auto.selections[0].selection_basis == "static_priority"
+    assert auto.selections[0].matched_cost is None
+
+
+def test_canonical_workload_key_is_versioned_and_independent_of_names() -> None:
+    plan = lower_to_plan(linear_graph())
+    key = canonical_workload_key(plan, plan.steps[0])
+    renamed_step = replace(plan.steps[0], name="renamed_linear")
+    renamed_plan = replace(plan, name="renamed_model", steps=(renamed_step,))
+    assert canonical_workload_key(renamed_plan, renamed_step) == key
+    assert key.startswith("bakenn.workload.v1:")
+    assert '"op":"linear_s8"' in key
+    assert '"shape":[1,12]' in key
+    assert '"storage":"input"' in key
+    different = lower_to_plan(linear_graph(input_count=13))
+    assert canonical_workload_key(different, different.steps[0]) != key
+
+
+def _measured_cost(
+    kernel_id: str,
+    workload: str,
+    cycles: int,
+    evidence: str,
+    *,
+    toolchain: str | None = CORTEX_M4.toolchain,
+    compiler_flags: tuple[str, ...] = CORTEX_M4.compiler_flags,
+) -> KernelCostMeasurement:
+    assert toolchain is not None
+    return KernelCostMeasurement(
+        kernel_id=kernel_id,
+        workload=workload,
+        cycles=cycles,
+        toolchain=toolchain,
+        compiler_flags=compiler_flags,
+        evidence=evidence,
+    )
+
+
+def test_measured_policy_uses_only_exact_costs_and_records_provenance() -> None:
+    plan = lower_to_plan(linear_graph())
+    workload = canonical_workload_key(plan, plan.steps[0])
+    portable_cost = _measured_cost(
+        "portable.linear_s8.v1", workload, 400, "portable-run.json"
+    )
+    generic_cost = _measured_cost(
+        "optimized.linear_oi2.v1", workload, 100, "oi2-run.json"
+    )
+    m4_cost = _measured_cost(
+        "cortex_m4.linear_smlad.v1", workload, 150, "smlad-run.json"
+    )
+    target = replace(
+        CORTEX_M4,
+        measured_costs=(portable_cost, generic_cost, m4_cost),
+    )
+    backend = select_backend_plan(
+        plan,
+        bakenn.CBackendOptions(
+            kernel_policy=bakenn.KernelPolicy.MEASURED,
+            target=target,
+        ),
+    )
+    selection = backend.selections[0]
+    assert selection.kernel_id == "optimized.linear_oi2.v1"
+    assert selection.selection_basis == "measured_latency"
+    assert selection.workload_key == workload
+    assert selection.matched_cost == generic_cost
+    assert "100 cycles" in selection.reason
+    assert "oi2-run.json" in selection.reason
+    assert "150 cycles did not beat" in selection.rejected[
+        "cortex_m4.linear_smlad.v1"
+    ]
+
+
+def test_measured_policy_falls_back_for_empty_or_stale_cost_table() -> None:
+    plan = lower_to_plan(linear_graph())
+    workload = canonical_workload_key(plan, plan.steps[0])
+    empty = select_backend_plan(
+        plan,
+        bakenn.CBackendOptions(
+            kernel_policy=bakenn.KernelPolicy.MEASURED,
+            target=CORTEX_M4,
+        ),
+    )
+    selection = empty.selections[0]
+    assert selection.kernel_id == "portable.linear_s8.v1"
+    assert selection.selection_basis == "measured_portable_fallback"
+    assert selection.workload_key == workload
+    assert selection.matched_cost is None
+    assert "no exact measured latency cost" in selection.reason
+
+    stale = _measured_cost(
+        "optimized.linear_oi2.v1",
+        workload,
+        1,
+        "stale-toolchain.json",
+        toolchain="arm-none-eabi-stale",
+    )
+    stale_target = replace(CORTEX_M4, measured_costs=(stale,))
+    stale_backend = select_backend_plan(
+        plan,
+        bakenn.CBackendOptions(
+            kernel_policy=bakenn.KernelPolicy.MEASURED,
+            target=stale_target,
+        ),
+    )
+    assert stale_backend.selections[0].kernel_id == "portable.linear_s8.v1"
+    assert stale_backend.selections[0].matched_cost is None
+    assert "no exact measured latency cost" in stale_backend.selections[0].rejected[
+        "optimized.linear_oi2.v1"
+    ]
+
+
+def test_measured_ties_prefer_portable_deterministically() -> None:
+    plan = lower_to_plan(linear_graph())
+    workload = canonical_workload_key(plan, plan.steps[0])
+    portable_cost = _measured_cost(
+        "portable.linear_s8.v1", workload, 100, "portable-tie.json"
+    )
+    optimized_cost = _measured_cost(
+        "optimized.linear_oi2.v1", workload, 100, "optimized-tie.json"
+    )
+    target = replace(CORTEX_M4, measured_costs=(optimized_cost, portable_cost))
+    backend = select_backend_plan(
+        plan,
+        bakenn.CBackendOptions(
+            kernel_policy=bakenn.KernelPolicy.MEASURED,
+            target=target,
+        ),
+    )
+    assert backend.selections[0].kernel_id == "portable.linear_s8.v1"
+    assert backend.selections[0].matched_cost == portable_cost
+
+
+def test_static_priority_falls_back_for_small_linear_and_require_optimized_fails_closed() -> None:
+    plan = lower_to_plan(linear_graph(3, 5))
+    selected = select_backend_plan(
+        plan, bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY)
+    )
+    assert selected.selections[0].kernel_id == "portable.linear_s8.v1"
+    assert "optimized.linear_oi2.v1" in selected.selections[0].rejected
+    assert "optimized.linear_oi2_tail.v1" in selected.selections[0].rejected
     with pytest.raises(CompileError, match="no supported implementation"):
         select_backend_plan(
             plan,
@@ -107,13 +258,13 @@ def test_auto_falls_back_for_small_linear_and_require_optimized_fails_closed() -
         )
 
 
-def test_auto_selects_linear_tail_and_require_optimized_accepts_it() -> None:
+def test_static_priority_selects_linear_tail_and_require_optimized_accepts_it() -> None:
     plan = lower_to_plan(linear_graph(12, 5))
-    auto = select_backend_plan(
-        plan, bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO)
+    selected = select_backend_plan(
+        plan, bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY)
     )
-    assert auto.selections[0].kernel_id == "optimized.linear_oi2_tail.v1"
-    packed = auto.packed_constants["weight.linear_oi2_tail"]
+    assert selected.selections[0].kernel_id == "optimized.linear_oi2_tail.v1"
+    packed = selected.packed_constants["weight.linear_oi2_tail"]
     expected_pairs = plan.constants["weight"][:4].reshape(2, 2, 12).transpose(0, 2, 1)
     expected = np.concatenate((expected_pairs.reshape(-1), plan.constants["weight"][4]))
     np.testing.assert_array_equal(packed.value, expected)
@@ -128,7 +279,7 @@ def test_disabling_packing_makes_optimized_kernel_inapplicable() -> None:
     backend = select_backend_plan(
         plan,
         bakenn.CBackendOptions(
-            kernel_policy=bakenn.KernelPolicy.AUTO,
+            kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
             enable_weight_packing=False,
         ),
     )
@@ -142,13 +293,13 @@ def test_manifest_records_reproducible_backend_decisions(tmp_path) -> None:
     compiled = bakenn.compile(
         linear_graph(),
         tmp_path,
-        backend_options=bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.AUTO),
+        backend_options=bakenn.CBackendOptions(kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY),
     )
     manifest = json.loads(compiled.artifacts.manifest.read_text(encoding="utf-8"))
     operation = manifest["operations"][0]
     selection = manifest["backend"]["selections"][0]
-    assert manifest["schema_version"] == 3
-    assert manifest["backend"]["kernel_policy"] == "auto"
+    assert manifest["schema_version"] == 4
+    assert manifest["backend"]["kernel_policy"] == "static_priority"
     assert manifest["backend"]["name"] == "c11"
     assert manifest["backend"]["optimized_steps"] == 1
     assert manifest["backend"]["weight_packing"] is True

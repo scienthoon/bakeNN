@@ -31,6 +31,7 @@ from bakenn.ir import (
     ReshapeOp,
     verify_graph,
 )
+from bakenn.ir.ops.pool import AVERAGE_POOL_PROFILE_TFLITE_RAW_V1
 
 
 @dataclass(frozen=True)
@@ -244,6 +245,16 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
     unsupported = [type(op).__name__ for op in graph.ops if not isinstance(op, supported)]
     if unsupported:
         raise CompileError(f"unsupported TFLite comparison op: {unsupported[0]}")
+    for op in graph.ops:
+        if (
+            isinstance(op, AveragePool2DOp)
+            and op.arithmetic_profile != AVERAGE_POOL_PROFILE_TFLITE_RAW_V1
+        ):
+            raise CompileError(
+                f"{op.name}: TFLite AveragePool export requires arithmetic_profile="
+                f"{AVERAGE_POOL_PROFILE_TFLITE_RAW_V1!r}; refusing to silently "
+                "change centered BakeNN half-tie rounding"
+            )
 
     builder = flatbuffers.Builder(2 * 1024 * 1024)
     value_names = list(graph.values)
@@ -408,7 +419,7 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
         ("MAX_POOL_2D", tflite.BuiltinOperator.MAX_POOL_2D, 2),
         ("RESHAPE", tflite.BuiltinOperator.RESHAPE, 1),
         ("FULLY_CONNECTED", tflite.BuiltinOperator.FULLY_CONNECTED, 4),
-        ("PADV2", tflite.BuiltinOperator.PADV2, 1),
+        ("PADV2", tflite.BuiltinOperator.PADV2, 2),
     )
     opcode_indices = {name: index for index, (name, _, _) in enumerate(opcode_specs)}
 
@@ -420,8 +431,8 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
         explicit_pad = explicit_pads.get(op.name)
         if explicit_pad is not None:
             padded_name, paddings_name, pad_value_name = explicit_pad
-            tflite.PadOptionsStart(builder)
-            pad_options = tflite.PadOptionsEnd(builder)
+            tflite.PadV2OptionsStart(builder)
+            pad_options = tflite.PadV2OptionsEnd(builder)
             operators.append(
                 _operator(
                     builder,
@@ -432,7 +443,7 @@ def export_quantized_graph(graph: QuantizedGraph) -> TFLiteExport:
                         tensor_indices[pad_value_name],
                     ),
                     tensor_indices[padded_name],
-                    tflite.BuiltinOptions.PadOptions,
+                    tflite.BuiltinOptions.PadV2Options,
                     pad_options,
                 )
             )

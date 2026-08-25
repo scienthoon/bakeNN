@@ -11,6 +11,7 @@ from bakenn.backend.portable_c.selection import (
     PackedConstant,
 )
 from bakenn.ir import PerTensorQParams
+from bakenn.ir.ops.pool import AVERAGE_POOL_PROFILE_TFLITE_RAW_V1
 from bakenn.ir.types import TARGET_SIZE_MAX
 from bakenn.plan import ExecutionPlan, LinearStep
 from bakenn.plan.steps import (
@@ -88,6 +89,8 @@ def _average_pool_rounding_is_exact(
     step: AveragePool2DStep,
     plan: ExecutionPlan,
 ) -> bool:
+    if step.arithmetic_profile == AVERAGE_POOL_PROFILE_TFLITE_RAW_V1:
+        return True
     input_type = plan.tensors[step.input].tensor_type
     output_type = plan.tensors[step.output].tensor_type
     qparams = input_type.qparams
@@ -493,7 +496,8 @@ def pool_capability(
     ):
         failure = (
             "ESP-NN AveragePool raw-code rounding can differ from BakeNN centered "
-            "half-away rounding for this zero-point/window combination"
+            "half-away rounding for this arithmetic profile and "
+            "zero-point/window combination"
         )
     elif failure is None and not _shape_fits(
         input_type.shape,

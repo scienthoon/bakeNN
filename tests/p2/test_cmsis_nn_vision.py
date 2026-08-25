@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 import os
 from pathlib import Path
@@ -22,6 +23,7 @@ from bakenn.ir import (
     QuantizedGraph,
     TensorType,
 )
+from bakenn.ir.ops.pool import AVERAGE_POOL_PROFILE_TFLITE_RAW_V1
 from bakenn.targets import CORTEX_M4, PORTABLE_32, build_freestanding_elf
 from tests.p0.model_fixtures import (
     mobilenet_v1_graph,
@@ -32,7 +34,7 @@ from tests.p0.model_fixtures import (
 from .support import require_compiler
 
 
-def _options(*, target=CORTEX_M4, policy=bakenn.KernelPolicy.AUTO):  # type: ignore[no-untyped-def]
+def _options(*, target=CORTEX_M4, policy=bakenn.KernelPolicy.STATIC_PRIORITY):  # type: ignore[no-untyped-def]
     return bakenn.CBackendOptions(
         kernel_policy=policy,
         enable_cmsis_nn=True,
@@ -474,6 +476,24 @@ def test_cmsis_nn_vision_falls_back_when_contract_is_not_supported(
     assert "half-away rounding" in selection.rejected[
         "cmsis_nn.average_pool2d_s8.v4.0.0"
     ]
+
+    tflite_average = replace(
+        even_window_average,
+        name="average_tflite_raw_rounding",
+        ops=(
+            replace(
+                even_window_average.ops[0],
+                arithmetic_profile=AVERAGE_POOL_PROFILE_TFLITE_RAW_V1,
+            ),
+        ),
+    )
+    raw_compiled, raw_executable = _compile_host(
+        tflite_average, tmp_path / "average_tflite_raw", "clang"
+    )
+    assert raw_compiled.artifacts.backend_plan.selections[0].kernel_id == (
+        "cmsis_nn.average_pool2d_s8.v4.0.0"
+    )
+    _run_and_compare(raw_compiled, raw_executable, count=512, seed=20260824)
 
 
 def test_cmsis_nn_vision_bundle_cross_links_without_runtime_or_heap(

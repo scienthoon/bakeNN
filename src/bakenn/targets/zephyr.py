@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 from typing import TYPE_CHECKING
 
+from bakenn.artifacts import load_manifest
 from bakenn.errors import CompileError
 
 from .model import TargetDescriptor
@@ -34,7 +35,7 @@ class ZephyrProject:
 
 
 def _load_manifest(artifacts: "CompilationArtifacts") -> dict[str, object]:
-    return json.loads(artifacts.manifest.read_text(encoding="utf-8"))
+    return load_manifest(artifacts.manifest)
 
 
 def _require_cortex_m4(
@@ -59,7 +60,12 @@ def _require_cortex_m4(
     return descriptor, manifest
 
 
-def _main_source(symbol: str, board: str) -> str:
+def _main_source(
+    symbol: str,
+    target_id: str,
+    board: str,
+    iotlab_architecture: str,
+) -> str:
     macro = symbol.upper()
     return f'''#include "{symbol}.h"
 
@@ -131,7 +137,8 @@ int main(void) {{
 
     size_t stack_unused = 0u;
     const int stack_status = k_thread_stack_space_get(k_current_get(), &stack_unused);
-    printk("BAKENN target=nrf52840dk board={board} runs=%u first_cycles=%" PRIu64
+    printk("BAKENN target={target_id} board={board} iotlab_architecture={iotlab_architecture}"
+           " runs=%u first_cycles=%" PRIu64
            " median_cycles=%" PRIu64 " p95_cycles=%" PRIu64
            " arena_bytes=%u stack_unused_bytes=%zu stack_status=%d\\n",
            BAKENN_BENCHMARK_RUNS, first_cycles, measured_cycles[50],
@@ -167,24 +174,11 @@ def export_zephyr_project(
     root = Path(output_dir)
     source = root / "src"
     generated = source / "generated"
-    generated.mkdir(parents=True, exist_ok=True)
-    for artifact in (
-        artifacts.header,
-        artifacts.model_source,
-        artifacts.weights_header,
-        artifacts.weights_source,
-        artifacts.kernels_header,
-        artifacts.kernels_source,
-        artifacts.manifest,
-        artifacts.build_fragment,
-    ):
-        shutil.copy2(artifact, generated / artifact.name)
-    if artifacts.support_sources:
-        shutil.copytree(
-            artifacts.output_dir / "third_party",
-            generated / "third_party",
-            dirs_exist_ok=True,
-        )
+    source.mkdir(parents=True, exist_ok=True)
+    if generated.exists():
+        raise CompileError(f"Zephyr generated artifact directory already exists: {generated}")
+    shutil.copytree(artifacts.output_dir, generated)
+    load_manifest(generated / artifacts.manifest.name)
 
     support_sources = "".join(
         f"  src/generated/{path.relative_to(artifacts.output_dir).as_posix()}\n"
@@ -231,7 +225,15 @@ def export_zephyr_project(
         "CONFIG_SPEED_OPTIMIZATIONS=y\n",
         encoding="utf-8",
     )
-    (source / "main.c").write_text(_main_source(symbol, board), encoding="utf-8")
+    (source / "main.c").write_text(
+        _main_source(
+            symbol,
+            descriptor.target_id,
+            board,
+            _SUPPORTED_BOARDS[board],
+        ),
+        encoding="utf-8",
+    )
     (root / "bakenn_target.json").write_text(
         json.dumps(
             {

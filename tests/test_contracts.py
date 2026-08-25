@@ -48,6 +48,15 @@ def one_linear_graph(*, input_scale=2.0, input_zero_point=0, output_scale=0.5):
 
 
 class ContractTests(unittest.TestCase):
+    def test_documented_target_profiles_are_top_level_public_api(self):
+        self.assertIs(bakenn.PORTABLE_32, bakenn.resolve_target("portable32"))
+        self.assertIs(bakenn.CORTEX_M0PLUS, bakenn.resolve_target("cortex-m0plus"))
+        self.assertIs(bakenn.CORTEX_M4, bakenn.resolve_target("cortex-m4"))
+        self.assertIs(bakenn.RV32IMC, bakenn.resolve_target("rv32imc"))
+        self.assertIs(bakenn.ESP32, bakenn.resolve_target("esp32"))
+        self.assertIs(bakenn.ESP32_S3, bakenn.resolve_target("esp32s3"))
+        self.assertIs(bakenn.ESP32_C3, bakenn.resolve_target("esp32c3"))
+
     def test_quantization_fields_reject_fractional_or_boolean_integers(self):
         with self.assertRaises(ValueError):
             PerTensorQParams(1.0, 0.5)
@@ -278,8 +287,8 @@ int main(void) {{
             self.assertIn(f"#define {macro}_INPUT_RANK 2u", header)
             self.assertIn(f"#define {macro}_INPUT_DIM_1 1u", header)
             self.assertIn(f"#define {macro}_INPUT_BYTES 1u", header)
-            self.assertIn("uint8_t *restrict arena", header)
-            self.assertIn("const int8_t *restrict input", header)
+            self.assertIn("uint8_t *BKNN_RESTRICT arena", header)
+            self.assertIn("const int8_t *BKNN_RESTRICT input", header)
             self.assertRegex(header, rf"#define {macro}_INPUT_SCALE 0x[0-9a-f.]+p[+-][0-9]+f")
 
 

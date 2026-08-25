@@ -16,7 +16,7 @@ from tests.p2.test_backend_selection import linear_graph
 
 def _options() -> bakenn.CBackendOptions:
     return bakenn.CBackendOptions(
-        kernel_policy=bakenn.KernelPolicy.AUTO,
+        kernel_policy=bakenn.KernelPolicy.STATIC_PRIORITY,
         target=CORTEX_M4,
     )
 
