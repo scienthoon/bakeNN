@@ -43,7 +43,12 @@ def _verify_conv1d(op: Conv1DOp, graph: QuantizedGraph) -> None:
         _fail(op, "Conv1D symmetric weights require zero_point zero and range [-127,127]")
     if not isinstance(bias.qparams, PerAxisQParams) or bias.qparams.axis != 0 or any(bias.qparams.zero_points):
         _fail(op, "Conv1D bias requires zero-point-zero per-output-channel qparams")
-    expected_bias_scales = tuple(normalize_scale_float32(x.qparams.scale * scale) for scale in weight.qparams.scales)
+    try:
+        expected_bias_scales = tuple(
+            normalize_scale_float32(x.qparams.scale * scale) for scale in weight.qparams.scales
+        )
+    except ValueError:
+        _fail(op, "Conv1D bias scale product is not representable as float32")
     if len(expected_bias_scales) != output_channels or len(bias.qparams.scales) != output_channels or any(
         not math.isclose(a, b, rel_tol=1e-12) for a, b in zip(bias.qparams.scales, expected_bias_scales)
     ):
@@ -65,6 +70,8 @@ def _verify_pool(op: AveragePool1DOp | MaxPool1DOp, graph: QuantizedGraph) -> No
         _fail(op, "Pool1D requires rank-three static batch size one")
     if not isinstance(x.qparams, PerTensorQParams) or x.qparams != output.qparams:
         _fail(op, "Pool1D must preserve per-tensor qparams")
+    if any(value > TARGET_SIZE_MAX for value in (op.kernel, op.stride, *op.padding)):
+        _fail(op, "Pool1D kernel, stride, and padding must fit the 32-bit target ABI")
     expected_length = (x.shape[1] + sum(op.padding) - op.kernel) // op.stride + 1
     if expected_length <= 0 or output.shape != (1, expected_length, x.shape[2]):
         _fail(op, f"Pool1D output shape must be (1, {expected_length}, {x.shape[2]})")

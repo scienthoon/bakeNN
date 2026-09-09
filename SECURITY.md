@@ -2,8 +2,22 @@
 
 ## Supported versions
 
-BakeNN is pre-1.0 alpha software. Security fixes are applied to the latest
-`0.1.x` release and the `main` branch; older snapshots are not maintained.
+BakeNN follows the 1.x compatibility and support policy in `STABILITY.md`.
+Security fixes are applied to the latest supported `1.x` release and the
+`main` branch; older development snapshots are not maintained.
+
+## Trust boundaries
+
+Generated artifact manifests use SHA-256 digests to detect file corruption and
+inconsistent artifact sets. These are unkeyed integrity checks, not digital
+signatures: someone who can replace both files and their manifest can recompute
+the hashes. Authenticate the artifact source separately before building or
+deploying externally supplied C code.
+
+PyTorch capture runs the supplied Python model on the host. Only capture model
+code you trust; it is not a sandbox for untrusted Python. Static IR checks and
+the optional TFLite importer validate their supported model representation,
+but do not provide host process isolation or resource limits.
 
 ## Reporting a vulnerability
 

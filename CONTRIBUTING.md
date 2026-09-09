@@ -2,7 +2,8 @@
 
 BakeNN welcomes bug reports, documentation improvements, model-compatibility
 fixtures and carefully scoped operator or kernel contributions. The project is
-alpha software, so public API changes must be discussed before implementation.
+versioned software; public API changes must follow `STABILITY.md` and be
+discussed before implementation when they change the compatibility contract.
 
 ## Development setup
 

@@ -674,6 +674,103 @@ def _choose(
     )
 
 
+def _sram_feasible_capabilities(
+    plan: ExecutionPlan,
+    rows: tuple[tuple[KernelCapability, ...], ...],
+    options: CBackendOptions,
+    workloads: tuple[str, ...],
+) -> tuple[tuple[tuple[KernelCapability, ...], ...], str | None]:
+    """Find a feasible shared-scratch envelope before applying kernel policy.
+
+    Scratch size and alignment are maxima across steps, so independently
+    fitting candidates need not fit together. Enumerating the supported
+    power-of-two alignments covers every feasible combination without a
+    Cartesian search. Among feasible envelopes, retain policy preference in
+    execution order; this does not claim a globally measured fastest graph.
+    """
+
+    budget = options.target.sram_bytes
+    if budget is None:
+        return rows, None
+    # Validate the original candidate sets first. A malformed registration or
+    # unsupported policy must not be mistaken for a resource fallback.
+    preferred = tuple(
+        _choose(step, row, options, workload)
+        for step, row, workload in zip(plan.steps, rows, workloads)
+    )
+    base_alignment = max(plan.arena_alignment, options.target.arena_alignment)
+    minimum_arena = (plan.arena_size + base_alignment - 1) & -base_alignment
+    if minimum_arena > budget:
+        raise CompileError(
+            f"target {options.target.target_id} minimum arena {minimum_arena} exceeds "
+            f"SRAM budget {budget}; application globals and stack are not included"
+        )
+    preferred_size = max((plan.scratch_size, *(item.capability.scratch_size for item in preferred)))
+    preferred_alignment = max((
+        plan.scratch_alignment,
+        *(item.capability.scratch_alignment for item in preferred if item.capability.scratch_size),
+    ))
+    if preferred_size:
+        offset = (plan.activation_arena_size + preferred_alignment - 1) & -preferred_alignment
+        alignment = max(base_alignment, preferred_alignment)
+        preferred_arena = (offset + preferred_size + alignment - 1) & -alignment
+    else:
+        preferred_arena = minimum_arena
+    if preferred_arena <= budget:
+        # Preserve existing decisions and rejection metadata when the normal
+        # policy already fits; no resource fallback is necessary.
+        return rows, None
+    alignments = sorted({
+        plan.scratch_alignment,
+        *(max(plan.scratch_alignment, item.scratch_alignment)
+          for row in rows for item in row if item.supported and item.scratch_size),
+    })
+    best_rows = None
+    best_key = None
+    best_note = None
+    for alignment in alignments:
+        arena_alignment = max(base_alignment, alignment)
+        scratch_offset = (plan.activation_arena_size + alignment - 1) & -alignment
+        capacity = (budget & -arena_alignment) - scratch_offset
+        if capacity < plan.scratch_size:
+            continue
+        feasible = tuple(tuple(
+            item for item in row
+            if not item.supported or (
+                item.scratch_alignment <= alignment and item.scratch_size <= capacity
+            )
+        ) for row in rows)
+        try:
+            decisions = tuple(
+                _choose(step, row, options, workload)
+                for step, row, workload in zip(plan.steps, feasible, workloads)
+            )
+        except CompileError:
+            # The original rows are valid; this envelope lacks a candidate
+            # allowed by the requested policy for at least one step.
+            continue
+        key = tuple(
+            (0, decision.matched_cost.cycles, decision.capability.optimized,
+             -decision.capability.priority, decision.capability.kernel_id)
+            if decision.matched_cost is not None else
+            (1, 0, False, -decision.capability.priority, decision.capability.kernel_id)
+            for decision in decisions
+        )
+        if best_key is None or key < best_key:
+            best_key, best_rows = key, feasible
+            best_note = (
+                f"excluded by SRAM budget {budget}: the selected shared-scratch "
+                f"envelope permits at most {capacity} bytes with alignment <= {alignment}"
+            )
+    if best_rows is None:
+        raise CompileError(
+            f"target {options.target.target_id}: kernel policy {options.kernel_policy.value} "
+            f"has no supported implementation within SRAM budget {budget}; "
+            "application globals and stack are not included"
+        )
+    return best_rows, best_note
+
+
 def select_backend_plan(
     plan: ExecutionPlan,
     options: CBackendOptions | None = None,
@@ -688,11 +785,26 @@ def select_backend_plan(
         raise TypeError("options must be CBackendOptions")
     selections: list[KernelSelection] = []
     packed: dict[str, PackedConstant] = {}
+    capability_rows = tuple(
+        tuple(kernel_capabilities(step, plan, resolved_options)) for step in plan.steps
+    )
+    workload_keys = tuple(canonical_workload_key(plan, step) for step in plan.steps)
+    feasible_rows, budget_note = _sram_feasible_capabilities(
+        plan, capability_rows, resolved_options, workload_keys
+    )
     for index, step in enumerate(plan.steps):
-        capabilities = tuple(kernel_capabilities(step, plan, resolved_options))
-        workload_key = canonical_workload_key(plan, step)
-        decision = _choose(step, capabilities, resolved_options, workload_key)
+        capabilities = capability_rows[index]
+        feasible = feasible_rows[index]
+        feasible_ids = {item.kernel_id for item in feasible}
+        workload_key = workload_keys[index]
+        decision = _choose(step, feasible, resolved_options, workload_key)
         chosen = decision.capability
+        selection_reason = decision.reason
+        budget_excluded = any(item.kernel_id not in feasible_ids for item in capabilities)
+        if budget_excluded and decision.selection_basis == "measured_portable_fallback":
+            selection_reason = selection_reason.replace(
+                "no exact measured latency cost matched", "no SRAM-feasible exact measured latency cost matched"
+            )
         measured_costs = _exact_measured_costs(
             capabilities, workload_key, resolved_options
         )
@@ -709,6 +821,9 @@ def select_backend_plan(
                 and not item.optimized
             ):
                 rejected[item.kernel_id] = "excluded by require_optimized kernel policy"
+            elif item.kernel_id not in feasible_ids:
+                assert budget_note is not None
+                rejected[item.kernel_id] = budget_note
             elif resolved_options.kernel_policy is KernelPolicy.MEASURED:
                 measured_cost = measured_costs.get(item.kernel_id)
                 if measured_cost is None:
@@ -761,7 +876,7 @@ def select_backend_plan(
                 step_name=step.name,
                 kernel_id=chosen.kernel_id,
                 optimized=chosen.optimized,
-                reason=decision.reason,
+                reason=selection_reason,
                 rejected=rejected,
                 constant_overrides=chosen.constant_overrides,
                 packed_constants=chosen.packed_constants,

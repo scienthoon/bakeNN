@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from bakenn.artifacts import load_manifest
 from bakenn.errors import CompileError
 
+from ._export import staged_export
 from .model import TargetDescriptor
 from .profiles import resolve_target
 
@@ -167,7 +168,25 @@ def export_zephyr_project(
     *,
     board: str = "nrf52840dk_nrf52840",
 ) -> ZephyrProject:
-    """Create a self-contained Zephyr benchmark project for an IoT-LAB M4 board."""
+    """Create a benchmark project atomically into an absent or empty directory."""
+
+    _require_cortex_m4(artifacts, target, board)
+    output = Path(output_dir)
+    with staged_export(artifacts.output_dir, output) as staging:
+        project = _export_zephyr_project_into(artifacts, target, staging, board=board)
+    return ZephyrProject(
+        output, output / "src", output / "src" / "generated", project.target,
+        project.board, project.iotlab_architecture, project.model_symbol,
+    )
+
+
+def _export_zephyr_project_into(
+    artifacts: "CompilationArtifacts",
+    target: str | TargetDescriptor,
+    output_dir: str | Path,
+    *,
+    board: str,
+) -> ZephyrProject:
 
     descriptor, manifest = _require_cortex_m4(artifacts, target, board)
     symbol = str(manifest["model"])

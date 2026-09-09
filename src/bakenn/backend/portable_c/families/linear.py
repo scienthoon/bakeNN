@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from bakenn.backend.vendor_safety import requantization_failure
+
 from bakenn.backend.esp_nn.integration import (
     ESP_NN_LINEAR_IDS,
     linear_capability as esp_nn_linear_capability,
@@ -309,6 +311,13 @@ def _linear_capabilities(
             failure = (
                 "CMSIS-NN FullyConnected v4 exposes one per-tensor multiplier/shift; "
                 "this Linear uses per-output-channel requantization"
+            )
+        if failure is None:
+            failure = requantization_failure(
+                step.accumulator_bounds,
+                step.multipliers,
+                step.shifts,
+                plan.tensors[step.output].tensor_type.qparams.zero_point,
             )
         if failure is not None:
             return KernelCapability(

@@ -4,6 +4,8 @@ from math import prod
 
 import numpy as np
 
+from bakenn.backend.vendor_safety import requantization_failure
+
 from bakenn.backend.esp_nn.integration import (
     ESP_NN_CONV_IDS,
     ESP_NN_DEPTHWISE_IDS,
@@ -861,6 +863,27 @@ def _cmsis_conv_scratch_bytes(
     return 4 * input_channels * kernel_height * kernel_width
 
 
+def _cmsis_coordinate_fits(
+    output_shape: tuple[int, ...],
+    kernel: tuple[int, int],
+    stride: tuple[int, int],
+    dilation: tuple[int, int],
+    padding: tuple[int, int, int, int],
+    *,
+    depthwise: bool = False,
+) -> bool:
+    for size, width, step, spacing, pad in zip(
+        output_shape[1:3], kernel, stride, dilation, (padding[0], padding[2])
+    ):
+        last_origin = (size - 1) * step
+        if last_origin + (width - 1) * spacing > _CMSIS_I32_MAX:
+            return False
+        if depthwise and not (pad <= 32768 and last_origin - pad <= 32767):
+            # Both generic and DSP depthwise paths narrow origins to int16.
+            return False
+    return True
+
+
 def _cmsis_depthwise_scratch_bytes(
     step: DepthwiseConv2DStep,
     input_channels: int,
@@ -923,12 +946,29 @@ def _conv2d_capabilities(
             or weight.shape[3] != input_channels
         ):
             failure = "CMSIS-NN Conv2D requires matching OHWI int8 weights"
+        elif input_channels * kernel_height * kernel_width > _CMSIS_U16_MAX:
+            failure = "CMSIS-NN Conv2D reduction length must fit uint16 kernel fields"
+        elif not _cmsis_coordinate_fits(
+            output_type.shape,
+            (kernel_height, kernel_width),
+            step.stride,
+            step.dilation,
+            step.padding,
+        ):
+            failure = "CMSIS-NN Conv2D coordinate arithmetic must fit int32"
         else:
             scratch_size = _cmsis_conv_scratch_bytes(
                 step, input_channels, kernel_height, kernel_width
             )
             if scratch_size > min(TARGET_SIZE_MAX, _CMSIS_I32_MAX):
                 failure = "CMSIS-NN Conv2D scratch exceeds its signed 32-bit context"
+        if failure is None:
+            failure = requantization_failure(
+                step.accumulator_bounds,
+                step.multipliers,
+                step.shifts,
+                output_type.qparams.zero_point,
+            )
         if failure is not None:
             return _unsupported_capability(_CMSIS_NN_CONV_ID, failure, priority=400)
         return KernelCapability(
@@ -1131,6 +1171,26 @@ def _depthwise_capabilities(
             or output_channels != input_channels * step.depth_multiplier
         ):
             failure = "CMSIS-NN DepthwiseConv2D requires matching HWO int8 weights"
+        elif kernel_height * kernel_width > _CMSIS_U16_MAX:
+            failure = "CMSIS-NN DepthwiseConv2D reduction length must fit uint16 kernel fields"
+        elif not _cmsis_coordinate_fits(
+            output_type.shape,
+            (kernel_height, kernel_width),
+            step.stride,
+            step.dilation,
+            step.padding,
+            depthwise=True,
+        ):
+            failure = "CMSIS-NN DepthwiseConv2D coordinate origins must fit int16"
+        elif step.depth_multiplier == 1 and step.dilation == (1, 1) and (
+            step.padding[0] > kernel_height
+            or (output_type.shape[1] - 1) * step.stride[0] - step.padding[0]
+            > input_type.shape[1]
+        ):
+            # The wrapper selects arm_depthwise_conv_s8_opt on Cortex-M4.
+            # Its DSP im2col path does not clamp ker_y_start/end to the
+            # kernel before memset. Non-DSP host execution bypasses this code.
+            failure = "CMSIS-NN DSP im2col padding exceeds its scratch window"
         else:
             scratch_size = _cmsis_depthwise_scratch_bytes(
                 step, input_channels, kernel_height, kernel_width
@@ -1139,6 +1199,13 @@ def _depthwise_capabilities(
                 failure = (
                     "CMSIS-NN DepthwiseConv2D scratch exceeds its signed 32-bit context"
                 )
+        if failure is None:
+            failure = requantization_failure(
+                step.accumulator_bounds,
+                step.multipliers,
+                step.shifts,
+                output_type.qparams.zero_point,
+            )
         if failure is not None:
             return _unsupported_capability(
                 _CMSIS_NN_DEPTHWISE_ID, failure, priority=400

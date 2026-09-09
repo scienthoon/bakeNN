@@ -49,6 +49,15 @@ def _verify_pad2d(op: Pad2DOp, graph: QuantizedGraph) -> None:
 def _verify_reduce_mean(op: ReduceMeanOp, graph: QuantizedGraph) -> None:
     input_type, output_type = _activation_pair(op, graph)
     rank = len(input_type.shape)
+    expected_rank = {Layout.NHWC: 4, Layout.NLC: 3}.get(input_type.layout)
+    if expected_rank is None:
+        raise GraphValidationError(f"{op.name}: ReduceMean supports NHWC spatial or NLC time axes")
+    if rank != expected_rank:
+        raise GraphValidationError(
+            f"{op.name}: ReduceMean {input_type.layout.value} input requires rank {expected_rank}"
+        )
+    if any(not -rank <= axis < rank for axis in op.axes):
+        raise GraphValidationError(f"{op.name}: ReduceMean axes must be unique and in range")
     axes = tuple(sorted({axis % rank for axis in op.axes}))
     if len(axes) != len(op.axes):
         raise GraphValidationError(f"{op.name}: ReduceMean axes must be unique and in range")

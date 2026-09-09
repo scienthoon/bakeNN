@@ -64,8 +64,11 @@ board = replace(CORTEX_M4, flash_bytes=512 * 1024, sram_bytes=128 * 1024)
 compiled = bakenn.compile(graph, "build/model", target=board)
 ```
 
-The host compiler rejects a constant payload larger than declared Flash and an
-arena larger than declared SRAM. These are necessary lower-bound checks, not
+The host compiler retries an SRAM-feasible kernel combination when a preferred
+candidate's shared scratch would make the arena too large, and rejects a model
+when no allowed combination fits. It rejects a final constant payload larger
+than declared Flash; Flash-aware candidate retry is not yet implemented. These
+are necessary lower-bound checks, not
 full firmware fit proofs: code, initialized data, other application globals,
 interrupt stacks, and task stacks require the final ELF/map and runtime stack
 measurement.
@@ -94,6 +97,15 @@ The synthetic linker addresses are for compatibility/resource inspection, not
 a board startup image. A production firmware must use the board vendor's
 startup code and linker script.
 
+An omitted `optimization` argument preserves any optimization flag declared in
+the target; `-Os` is the default only for unmeasured builds whose target has no
+optimization flag. A measured configuration without an optimization flag
+preserves that absence.
+For artifacts selected using measured costs, conflicting optimization,
+toolchain or target flags, and extra build flags, are rejected before writing
+build files. Recompile against matching measurement provenance when changing
+those flags. Cross-link success is still not a new physical measurement.
+
 ## ESP-IDF packaging
 
 ```python
@@ -111,6 +123,13 @@ it is eventually flashed. A boardless `idf.py build` proves toolchain/link
 compatibility and final firmware section sizes; it cannot prove latency,
 energy, cache behaviour, or physical peak stack usage.
 
+ESP-IDF component/project and Zephyr project exports require an absent or empty
+destination outside the source artifact directory. They stage a complete copy
+before publication. Existing application files are never overwritten; failed
+exports leave the destination and source artifact closure unchanged. To add a
+model to an existing application, export its component into a new directory
+and integrate that component deliberately.
+
 ## Measured cost tables
 
 `KernelCostMeasurement` accepts only positive cycle counts with a kernel id,
@@ -119,7 +138,8 @@ currently contain zero entries.
 
 `PORTABLE` is the default and excludes optimized candidates.
 `STATIC_PRIORITY` is an explicit capability-priority mode: it chooses the
-highest-priority supported candidate but makes no physical performance claim.
+highest-priority supported candidate that participates in an SRAM-feasible
+shared-scratch envelope, but makes no physical performance claim.
 `MEASURED` considers a cost only when kernel ID, canonical workload, exact
 target descriptor, toolchain, and compiler flags match; if no exact entry is
 available, it selects portable C. `AUTO` is deprecated and retained only as an

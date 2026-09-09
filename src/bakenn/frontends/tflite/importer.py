@@ -198,6 +198,7 @@ class _Importer:
         self.input_indices = _vector(subgraph.InputsAsNumpy())
         self.output_indices = _vector(subgraph.OutputsAsNumpy())
         self.tensors = self._read_tensors()
+        self.reserved_names = {tensor.name for tensor in self.tensors}
         self.opcodes = self._read_opcodes()
 
     def _read_tensors(self) -> tuple[_Tensor, ...]:
@@ -224,6 +225,10 @@ class _Importer:
                 )
             base_name = _decode_text(tensor.Name(), f"tensor_{index}")
             unique_name = base_name if base_name not in names else f"{base_name}__{index}"
+            suffix = 0
+            while unique_name in names:
+                suffix += 1
+                unique_name = f"{base_name}__{index}_{suffix}"
             names.add(unique_name)
             quantization = tensor.Quantization()
             if quantization is None:
@@ -438,9 +443,10 @@ class _Importer:
         if index is None:
             name = f"{op_name}.zero_bias"
             suffix = 0
-            while name in self.values:
+            while name in self.reserved_names:
                 suffix += 1
                 name = f"{op_name}.zero_bias_{suffix}"
+            self.reserved_names.add(name)
             qparams = PerAxisQParams(expected_scales, (0,) * channels, 0)
             self.values[name] = TensorType((channels,), DType.INT32, Layout.C, qparams)
             self.constants[name] = np.zeros((channels,), dtype=np.int32)
@@ -495,7 +501,15 @@ class _Importer:
         if activation == int(self.schema.ActivationFunctionType.RELU):
             return zero, 127
         if activation == int(self.schema.ActivationFunctionType.RELU6):
-            six = round_half_away_from_zero(6.0 / qparams.scale) + qparams.zero_point
+            # TFLite divides in float32 before rounding. Using Python float64
+            # changes ties (e.g. scale=float32(2.4): 2.5 vs 2.4999999).
+            # Saturate before integer conversion so tiny valid scales cannot
+            # overflow the intermediate float32 quotient.
+            with np.errstate(over="ignore"):
+                scaled_six = float(np.float32(6.0) / np.float32(qparams.scale))
+            if scaled_six >= 127 - qparams.zero_point:
+                return zero, 127
+            six = round_half_away_from_zero(scaled_six) + qparams.zero_point
             return zero, max(-128, min(127, six))
         raise CompileError(
             f"unsupported TFLite fused activation value {activation}; only NONE, RELU and RELU6 are supported"
@@ -663,12 +677,9 @@ class _Importer:
         if int(options.QuantizedBiasType()) != 0:
             raise CompileError(f"{op_name}: explicit quantized_bias_type is unsupported")
         bias_is_present = len(inputs) == 3 and inputs[2] >= 0
-        expected_version = 4 if bias_is_present else 6
-        if version != expected_version:
+        if not bias_is_present and version != 6:
             raise CompileError(
-                f"{op_name}: FullyConnected with "
-                f"{'a bias' if bias_is_present else 'no bias'} requires version "
-                f"{expected_version}, got {version}"
+                f"{op_name}: FullyConnected with no bias requires version 6, got {version}"
             )
         input_name = self._activation(inputs[0])
         output_name = self._activation(output_index, output=True)
@@ -787,17 +798,29 @@ class _Importer:
         inputs, output_index = self._operator_io(operator, op_name)
         if len(inputs) not in (1, 2) or inputs[0] < 0:
             raise CompileError(f"{op_name}: Reshape requires data and an optional shape constant")
-        options = _option(
-            self.schema,
-            operator,
-            "ReshapeOptions",
-            int(self.schema.BuiltinOptions.ReshapeOptions),
-        )
+        has_shape_input = len(inputs) == 2 and inputs[1] >= 0
+        # A constant second operand completely defines RESHAPE; TFLite permits
+        # the options union to be absent in this encoding. Other option types
+        # still fail closed, as do missing options without a shape operand.
+        if has_shape_input and int(operator.BuiltinOptionsType()) == 0:
+            if operator.BuiltinOptions() is not None:
+                raise CompileError(f"{op_name}: untyped Reshape builtin options are unsupported")
+            options = None
+        else:
+            options = _option(
+                self.schema,
+                operator,
+                "ReshapeOptions",
+                int(self.schema.BuiltinOptions.ReshapeOptions),
+            )
         input_name = self._activation(inputs[0])
         output_name = self._activation(output_index, output=True)
         input_type = self.values[input_name]
         output_type = self.values[output_name]
-        if len(inputs) == 2 and inputs[1] >= 0:
+        if has_shape_input:
+            shape_tensor = self._tensor(inputs[1], f"{op_name} shape")
+            if len(shape_tensor.shape) != 1:
+                raise CompileError(f"{op_name}: shape constant must be rank one")
             shape_spec = self._constant_ints(inputs[1], f"{op_name} shape")
         else:
             shape_spec = _vector(options.NewShapeAsNumpy())

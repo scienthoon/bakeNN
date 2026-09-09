@@ -7,7 +7,7 @@ import numpy as np
 from bakenn.errors import GraphValidationError
 from bakenn.ir.graph import QuantizedGraph
 from bakenn.ir.ops.spatial import ConvTranspose2DOp, ResizeBilinear2DOp, ResizeNearest2DOp
-from bakenn.ir.types import DType, Layout, PerAxisQParams, PerTensorQParams, normalize_scale_float32
+from bakenn.ir.types import DType, Layout, PerAxisQParams, PerTensorQParams, TARGET_SIZE_MAX, normalize_scale_float32
 from bakenn.ir.verify import verify_op
 
 
@@ -79,9 +79,12 @@ def _verify_transpose(op: ConvTranspose2DOp, graph: QuantizedGraph) -> None:
         _fail(op, "ConvTranspose2D weight and bias zero-points must be zero")
     if np.any(graph.constants[op.weight] == -128):
         _fail(op, "symmetric ConvTranspose2D weights must stay in [-127, 127]")
-    expected_bias_scales = tuple(
-        normalize_scale_float32(source.qparams.scale * scale) for scale in weight.qparams.scales
-    )
+    try:
+        expected_bias_scales = tuple(
+            normalize_scale_float32(source.qparams.scale * scale) for scale in weight.qparams.scales
+        )
+    except ValueError:
+        _fail(op, "ConvTranspose2D bias scale product is not representable as float32")
     if len(bias.qparams.scales) != output_channels or any(
         not math.isclose(actual, expected, rel_tol=1e-12, abs_tol=0.0)
         for actual, expected in zip(bias.qparams.scales, expected_bias_scales)
@@ -89,6 +92,11 @@ def _verify_transpose(op: ConvTranspose2DOp, graph: QuantizedGraph) -> None:
         _fail(op, "ConvTranspose2D bias scale must equal input_scale * weight_scale[channel]")
     if any(value <= 0 for value in (*op.stride, *op.dilation)) or any(value < 0 for value in (*op.padding, *op.output_padding)):
         _fail(op, "ConvTranspose2D stride/dilation must be positive and padding nonnegative")
+    if any(
+        value > TARGET_SIZE_MAX
+        for value in (*op.stride, *op.dilation, *op.padding, *op.output_padding, op.groups)
+    ):
+        _fail(op, "ConvTranspose2D parameters must fit the 32-bit target ABI")
     if any(op.output_padding[axis] >= op.stride[axis] for axis in range(2)):
         _fail(op, "ConvTranspose2D output_padding must be smaller than stride")
     expected = (

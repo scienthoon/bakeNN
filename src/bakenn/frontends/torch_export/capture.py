@@ -667,12 +667,7 @@ def _extract_inplace_add(
         raise CompileError(
             f"{node.name}: aten.add_.Tensor may not mutate caller or captured constant storage"
         )
-    users = getattr(target_input, "users", None)
-    if users is None or len(users) != 1 or node not in users:
-        raise CompileError(
-            f"{node.name}: aten.add_.Tensor target input is shared/fan-out; "
-            "mutation semantics are unsupported"
-        )
+    _require_unshared_inplace_input(node, "aten.add_.Tensor target")
     # FX proves the mutated value has no other semantic consumer, and the
     # exported signature was already checked for caller/buffer mutation. It is
     # therefore safe to normalize this target to a new immutable SSA result.
@@ -736,7 +731,10 @@ def _extract_pool1d(node: Any, values: dict[str, FloatValue], *, average: bool) 
                 f"{node.name}: AveragePool1D excludes padded positions; set count_include_pad=False"
             )
     else:
-        ceil_mode = False
+        dilation = _literal_1d(_arg(node, 4, (1,)), f"{node.name} dilation", minimum=1)
+        if dilation != 1:
+            raise CompileError(f"{node.name}: MaxPool1D dilation is unsupported")
+        ceil_mode = _literal_bool(_arg(node, 5, False), f"{node.name} ceil_mode")
     if ceil_mode:
         raise CompileError(f"{node.name}: Pool1D ceil_mode is unsupported")
     input_value, output_value = values[input_name], values[node.name]
@@ -777,11 +775,28 @@ def _extract_adaptive_global_average_pool(
 
 def _require_unshared_inplace_input(node: Any, description: str) -> None:
     input_node = _arg(node, 0, None)
-    users = getattr(input_node, "users", None)
-    if users is None or len(users) != 1 or node not in users:
-        raise CompileError(
-            f"{node.name}: {description} input is shared/fan-out; mutation semantics are unsupported"
-        )
+    consumer = node
+    alias_targets = {
+        "aten.view.default", "aten.reshape.default", "aten.flatten.using_ints",
+        "aten.squeeze.dim", "aten.unsqueeze.default", "aten.slice.Tensor",
+        "aten.dropout.default", "aten.dropout_.default",
+    }
+    while True:
+        users = getattr(input_node, "users", None)
+        if users is None or len(users) != 1 or consumer not in users:
+            raise CompileError(
+                f"{node.name}: {description} input is shared/fan-out; mutation semantics are unsupported"
+            )
+        # A view with one user can still alias a base with other users. Every
+        # base on the alias chain must be unshared before replacing mutation
+        # with an immutable SSA operation. Eval dropout also aliases its input.
+        target = str(getattr(input_node, "target", ""))
+        if target not in alias_targets and not (
+            target.endswith("_.default") or target == "aten.add_.Tensor"
+        ):
+            break
+        consumer = input_node
+        input_node = _arg(input_node, 0, None)
 
 
 def _extract_relu_like(node: Any, values: dict[str, FloatValue], target: str) -> object:

@@ -597,7 +597,7 @@ compiled = bakenn.compile_tflite(
 It currently accepts TFLite schema version 3, exactly one subgraph and public
 input/output, static batch-one rank-2/3/4 INT8 activations, and these builtin
 versions: `CONV_2D` v3, `DEPTHWISE_CONV_2D` v3, `FULLY_CONNECTED` v4 with bias
-or v6 without bias, `ADD` v2, `AVERAGE_POOL_2D`/`MAX_POOL_2D` v2, `RESHAPE` v1,
+or v6 with optional bias, `ADD` v2, `AVERAGE_POOL_2D`/`MAX_POOL_2D` v2, `RESHAPE` v1,
 and `PAD`/`PADV2` v2. Fused activation is limited to `NONE`, `RELU`, and
 `RELU6`. Unsupported operators/versions, dynamic, variable or sparse tensors,
 external buffers, custom ops, grouped Conv2D, and incompatible qparams fail

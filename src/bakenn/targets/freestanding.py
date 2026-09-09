@@ -291,7 +291,7 @@ def build_freestanding_elf(
     output_dir: str | Path,
     *,
     compiler: str | Path | None = None,
-    optimization: str = "-Os",
+    optimization: str | None = None,
     extra_flags: Iterable[str] = (),
 ) -> TargetBuildReport:
     """Cross-link generated C into a freestanding ELF and audit its symbols.
@@ -299,6 +299,8 @@ def build_freestanding_elf(
     This is a build/link compatibility check, not execution or cycle evidence.
     The generated runner statically owns the arena, so ``data+bss`` already
     includes the arena and must not be added to it a second time.
+    An omitted optimization preserves the target's declared optimization,
+    falling back to ``-Os`` only for unmeasured targets without one.
     """
 
     descriptor = resolve_target(target)
@@ -306,7 +308,7 @@ def build_freestanding_elf(
         raise CompileError(
             f"freestanding ELF verification supports ARM/RISC-V, not {descriptor.target_id}"
         )
-    if optimization not in ("-O0", "-O1", "-O2", "-O3", "-Os"):
+    if optimization is not None and optimization not in ("-O0", "-O1", "-O2", "-O3", "-Os"):
         raise ValueError("optimization must be one of -O0/-O1/-O2/-O3/-Os")
     metadata = load_manifest(artifacts.manifest)
     artifact_target = metadata["backend"]["target"]["id"]
@@ -315,6 +317,34 @@ def build_freestanding_elf(
             f"artifact target {artifact_target} does not match build target {descriptor.target_id}; "
             "recompile the QuantizedGraph with the requested target"
         )
+    extra_flags = tuple(str(value) for value in extra_flags)
+    declared_optimization = next(
+        (flag for flag in reversed(descriptor.compiler_flags) if flag.startswith("-O")),
+        None,
+    )
+    optimization_flags = (
+        (optimization,) if optimization is not None
+        else (("-Os",) if declared_optimization is None else ())
+    )
+    for selection in metadata["backend"]["selections"]:
+        measurement = selection.get("matched_measurement")
+        if measurement is None:
+            continue
+        if optimization is None:
+            # No -O flag is itself part of the measured configuration. Do not
+            # silently turn the compiler's default into a size-optimized build.
+            optimization_flags = ()
+        measured_flags = tuple(measurement["compiler_flags"])
+        if (
+            descriptor.compiler_flags != measured_flags
+            or descriptor.toolchain != measurement["toolchain"]
+            or (optimization is not None and optimization != declared_optimization)
+            or extra_flags
+        ):
+            raise CompileError(
+                "build flags differ from the measured kernel selection; "
+                "recompile with a target and measurements matching the requested flags"
+            )
     symbol = metadata["model"]
     build_dir = Path(output_dir)
     build_dir.mkdir(parents=True, exist_ok=True)
@@ -328,7 +358,7 @@ def build_freestanding_elf(
     toolchain = discover_gnu_toolchain(descriptor, compiler=compiler)
     flags = (
         *descriptor.compiler_flags,
-        optimization,
+        *optimization_flags,
         "-std=c11",
         "-ffreestanding",
         "-fno-builtin",
@@ -346,7 +376,7 @@ def build_freestanding_elf(
             if artifacts.support_sources
             else ()
         ),
-        *(str(value) for value in extra_flags),
+        *extra_flags,
     )
     command = [
         str(toolchain.compiler),
