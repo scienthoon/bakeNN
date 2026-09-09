@@ -276,8 +276,8 @@ def _resize2d(input_value: np.ndarray, output_shape: tuple[int, ...], *, bilinea
     _, _, output_height, output_width = output_shape
     result = np.empty(output_shape, dtype=np.float32)
     for output_y in range(output_height):
-        if align_corners and output_height > 1:
-            source_y = output_y * (input_height - 1) / (output_height - 1)
+        if align_corners:
+            source_y = output_y * (input_height - 1) / (output_height - 1) if output_height > 1 else 0.0
         else:
             source_y = max(0.0, min(input_height - 1.0, (output_y + 0.5) * input_height / output_height - 0.5))
         y0 = int(math.floor(source_y))
@@ -288,8 +288,8 @@ def _resize2d(input_value: np.ndarray, output_shape: tuple[int, ...], *, bilinea
                 source_x = output_x * input_width // output_width
                 result[0, :, output_y, output_x] = input_value[0, :, output_y * input_height // output_height, source_x]
                 continue
-            if align_corners and output_width > 1:
-                source_x_f = output_x * (input_width - 1) / (output_width - 1)
+            if align_corners:
+                source_x_f = output_x * (input_width - 1) / (output_width - 1) if output_width > 1 else 0.0
             else:
                 source_x_f = max(0.0, min(input_width - 1.0, (output_x + 0.5) * input_width / output_width - 0.5))
             x0 = int(math.floor(source_x_f))
@@ -1046,9 +1046,14 @@ def _quantize_float_graph_impl(
                 ).reshape(channels, height, width).transpose(1, 2, 0).reshape(-1)
             elif input_float.layout is FloatLayout.NCHW:
                 if output_float.layout is FloatLayout.NCL:
-                    if 1 not in input_float.shape[2:]:
+                    if (
+                        1 not in input_float.shape[2:]
+                        or output_float.shape[1] != input_float.shape[1]
+                        or output_float.shape[2] != math.prod(input_float.shape[2:])
+                    ):
                         raise CompileError(
-                            f"{op.name}: NCHW-to-NCL Squeeze requires one singleton spatial axis"
+                            f"{op.name}: NCHW-to-NCL Squeeze requires one singleton spatial axis "
+                            "and must preserve channels"
                         )
                 elif output_float.layout is not FloatLayout.NCHW or input_float.shape != output_float.shape:
                     raise CompileError(
@@ -1056,9 +1061,14 @@ def _quantize_float_graph_impl(
                     )
             elif input_float.layout is FloatLayout.NCL:
                 if output_float.layout is FloatLayout.NCHW:
-                    if 1 not in output_float.shape[2:]:
+                    if (
+                        1 not in output_float.shape[2:]
+                        or output_float.shape[1] != input_float.shape[1]
+                        or math.prod(output_float.shape[2:]) != input_float.shape[2]
+                    ):
                         raise CompileError(
-                            f"{op.name}: NCL-to-NCHW Unsqueeze requires one singleton spatial axis"
+                            f"{op.name}: NCL-to-NCHW Unsqueeze requires one singleton spatial axis "
+                            "and must preserve channels"
                         )
                 elif output_float.layout is FloatLayout.NC:
                     consumers = consumer_map.get(op.output, ())

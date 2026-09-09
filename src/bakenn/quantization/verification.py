@@ -12,7 +12,9 @@ from typing import Any
 import numpy as np
 
 from bakenn.errors import CompileError
-from bakenn.frontends.torch_export.model import FloatGraph, FloatValueKind
+from bakenn.frontends.torch_export.model import (
+    FloatFlattenOp, FloatGraph, FloatLayout, FloatReshapeOp, FloatValueKind,
+)
 from bakenn.ir import DType, PerTensorQParams
 from bakenn.plan import ExecutionPlan
 from bakenn.quantization.ptq_graph import _canonical_activation, _evaluate, _samples
@@ -149,6 +151,18 @@ def verify_ptq_accuracy(
     if not comparable_names:
         raise CompileError("float graph and execution plan have no common INT8 edges")
 
+    # PTQ keeps flattened channel-last storage and permutes the following
+    # Linear's weights to preserve the framework result. The intermediate NC
+    # edge therefore needs the same permutation before an elementwise error
+    # comparison; interpreting its shape alone loses that provenance.
+    flattened_sources = {
+        op.output: op.input
+        for op in float_graph.ops
+        if isinstance(op, (FloatFlattenOp, FloatReshapeOp))
+        and float_graph.values[op.input].layout in (FloatLayout.NCHW, FloatLayout.NCL)
+        and float_graph.values[op.output].layout is FloatLayout.NC
+    }
+
     aggregate: dict[str, dict[str, float | int]] = {
         name: {"count": 0, "maximum": 0.0, "absolute_sum": 0.0, "square_sum": 0.0, "endpoints": 0}
         for name in comparable_names
@@ -172,7 +186,12 @@ def verify_ptq_accuracy(
             qparams = tensor_type.qparams
             if not isinstance(qparams, PerTensorQParams):
                 raise CompileError(f"{name}: activation verification requires per-tensor qparams")
-            reference = _canonical_activation(float_values[name]).astype(np.float64)
+            if name in flattened_sources:
+                reference = _canonical_activation(
+                    float_values[flattened_sources[name]]
+                ).reshape(float_values[name].shape).astype(np.float64)
+            else:
+                reference = _canonical_activation(float_values[name]).astype(np.float64)
             quantized = trace[name]
             if reference.shape != quantized.shape:
                 raise CompileError(

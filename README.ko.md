@@ -618,7 +618,7 @@ compiled = bakenn.compile_tflite(
 현재 TFLite 스키마 버전 3, 정확히 하나인 서브그래프와 공개 입력/출력,
 정적 배치 크기 1인 rank-2/3/4 INT8 활성화를 허용하며 다음 builtin
 버전을 지원합니다. `CONV_2D` v3, `DEPTHWISE_CONV_2D` v3,
-바이어스가 있는 `FULLY_CONNECTED` v4 또는 바이어스가 없는 v6, `ADD`
+바이어스가 있는 `FULLY_CONNECTED` v4 또는 바이어스가 선택 사항인 v6, `ADD`
 v2, `AVERAGE_POOL_2D`/`MAX_POOL_2D` v2, `RESHAPE` v1,
 `PAD`/`PADV2` v2입니다. 융합 활성화는 `NONE`, `RELU`, `RELU6`으로
 제한됩니다. 지원하지 않는 연산자/버전, 동적·가변·희소 텐서, 외부 버퍼,

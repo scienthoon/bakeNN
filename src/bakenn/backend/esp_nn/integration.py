@@ -4,6 +4,8 @@ from math import prod
 
 import numpy as np
 
+from bakenn.backend.vendor_safety import requantization_failure
+
 from bakenn.backend.portable_c.contracts import KernelEmission, StepEmitContext
 from bakenn.backend.portable_c.selection import (
     CBackendOptions,
@@ -303,6 +305,13 @@ def conv_capability(
         failure = "ESP-NN optimized Conv2D requires groups one"
     elif failure is None and step.dilation != (1, 1):
         failure = "ESP-NN Conv2D ignores dilation other than one"
+    elif (
+        failure is None
+        and target == "esp32"
+        and weight.shape[1:3] == (1, 1)
+        and any(step.padding)
+    ):
+        failure = "ESP32 optimized 1x1 Conv2D ignores padding and requires zero padding"
     elif failure is None and not _shape_fits(
         input_type.shape,
         output_type.shape,
@@ -317,6 +326,11 @@ def conv_capability(
         or weight.shape[3] != input_type.shape[3]
     ):
         failure = "ESP-NN Conv2D requires matching OHWI int8 weights"
+    if failure is None:
+        failure = requantization_failure(
+            step.accumulator_bounds, step.multipliers, step.shifts,
+            output_type.qparams.zero_point,
+        )
     if failure is not None:
         return _unsupported(kernel_id, failure)
     scratch = (
@@ -378,6 +392,25 @@ def depthwise_capability(
         != input_type.shape[3] * step.depth_multiplier
     ):
         failure = "ESP-NN DepthwiseConv2D requires matching HWO int8 weights"
+    elif failure is None and (
+        target == "esp32"
+        or (step.depth_multiplier % 4 != 0
+            and not (step.depth_multiplier == 1 and input_type.shape[3] > 3))
+    ) and any(
+        pad > 32768 or (size - 1) * stride - pad > 32767
+        for size, stride, pad in zip(
+            output_type.shape[1:3], step.stride, (step.padding[0], step.padding[2])
+        )
+    ):
+        # Both generic optimized C branches narrow the origin to int16.
+        # The S3 dispatcher also reaches these branches for small-channel
+        # multiplier-one inputs and multipliers not divisible by four.
+        failure = "ESP-NN generic DepthwiseConv2D coordinate origins must fit int16"
+    if failure is None:
+        failure = requantization_failure(
+            step.accumulator_bounds, step.multipliers, step.shifts,
+            output_type.qparams.zero_point,
+        )
     if failure is not None:
         return _unsupported(kernel_id, failure)
     scratch = (
@@ -436,6 +469,11 @@ def linear_capability(
         or weight.shape != (output_count, input_count)
     ):
         failure = "ESP-NN FullyConnected requires matching OI int8 weights"
+    if failure is None:
+        failure = requantization_failure(
+            step.accumulator_bounds, step.multipliers, step.shifts,
+            output_type.qparams.zero_point,
+        )
     if failure is not None:
         return _unsupported(kernel_id, failure)
 

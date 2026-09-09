@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from bakenn.artifacts import load_manifest
 from bakenn.errors import CompileError
 
+from ._export import staged_export
 from .model import TargetDescriptor
 from .profiles import resolve_target
 
@@ -50,7 +51,20 @@ def export_esp_idf_component(
     target: str | TargetDescriptor,
     output_dir: str | Path,
 ) -> Path:
-    """Package generated model and pinned support sources as an ESP-IDF component."""
+    """Package a component atomically into an absent or empty directory."""
+
+    _require_esp_target(artifacts, target)
+    output = Path(output_dir)
+    with staged_export(artifacts.output_dir, output) as staging:
+        _export_esp_idf_component_into(artifacts, target, staging)
+    return output
+
+
+def _export_esp_idf_component_into(
+    artifacts: "CompilationArtifacts",
+    target: str | TargetDescriptor,
+    output_dir: str | Path,
+) -> Path:
 
     descriptor, _ = _require_esp_target(artifacts, target)
     output = Path(output_dir)
@@ -217,7 +231,23 @@ def export_esp_idf_project(
     target: str | TargetDescriptor,
     output_dir: str | Path,
 ) -> ESPIDFProject:
-    """Create a buildable ESP-IDF smoke project; no physical board is required."""
+    """Create a smoke project atomically into an absent or empty directory."""
+
+    _require_esp_target(artifacts, target)
+    output = Path(output_dir)
+    with staged_export(artifacts.output_dir, output) as staging:
+        project = _export_esp_idf_project_into(artifacts, target, staging)
+    return ESPIDFProject(
+        output, output / "components" / "bakenn_model", output / "main",
+        project.target, project.model_symbol,
+    )
+
+
+def _export_esp_idf_project_into(
+    artifacts: "CompilationArtifacts",
+    target: str | TargetDescriptor,
+    output_dir: str | Path,
+) -> ESPIDFProject:
 
     descriptor, manifest = _require_esp_target(artifacts, target)
     symbol = str(manifest["model"])
@@ -226,7 +256,7 @@ def export_esp_idf_project(
     main = root / "main"
     component.mkdir(parents=True, exist_ok=True)
     main.mkdir(parents=True, exist_ok=True)
-    export_esp_idf_component(artifacts, descriptor, component)
+    _export_esp_idf_component_into(artifacts, descriptor, component)
     (root / "CMakeLists.txt").write_text(
         "cmake_minimum_required(VERSION 3.16)\n"
         "include($ENV{IDF_PATH}/tools/cmake/project.cmake)\n"

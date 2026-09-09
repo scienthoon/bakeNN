@@ -57,6 +57,8 @@ jobs:
           tests/p3/test_mobilenet_v2_example.py
           tests/p3/test_model_zoo_c.py
           tests/p3/test_torch_extended.py
+          tests/test_frontend_audit.py
+          tests/test_ptq_defensive_audit.py
         env:
           CC: gcc
           BAKENN_REQUIRE_CC: "1"
@@ -88,6 +90,7 @@ jobs:
           tests/test_tflite_comparison_adapter.py
           tests/test_tflite_importer.py
           tests/test_tflite_litert_differential.py
+          tests/test_frontend_audit.py
         env:
           CC: gcc
           BAKENN_REQUIRE_CC: "1"
@@ -109,6 +112,7 @@ jobs:
           python -m pytest -q
           tests/targets/test_targets.py
           tests/targets/test_cortex_m4_kernels.py
+          tests/targets/test_build_flags.py
           tests/p2/test_cmsis_nn_fc.py
           tests/p2/test_cmsis_nn_vision.py
         env:

@@ -127,7 +127,10 @@ def _from_torch_sequential(model: object) -> FloatMLP:
     if not isinstance(model, nn.Sequential):
         raise CompileError("v0 PyTorch frontend supports nn.Sequential only")
     layers: list[FloatLinear] = []
-    for module_name, module in model.named_children():
+    # Sequential executes every registered slot, including repeated references
+    # to one module. named_children() deduplicates those identities and would
+    # silently drop calls (including a shared ReLU after a later Linear).
+    for module_name, module in model._modules.items():
         if isinstance(module, nn.Linear):
             weight = module.weight.detach().cpu().numpy()
             bias = None if module.bias is None else module.bias.detach().cpu().numpy()

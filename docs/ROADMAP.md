@@ -55,7 +55,8 @@ graph; full-model and full-peak-SRAM evidence remains future work.
 
 ## R1 — Make kernel selection honest
 
-Status: implemented and host-tested; physical cost tables remain evidence work.
+Status: SRAM-aware selection is implemented and host-tested; Flash-aware
+candidate retry and physical cost tables remain evidence work.
 
 The selector now defaults to `PORTABLE`. `STATIC_PRIORITY` filters capability
 predicates and chooses the highest declared priority. `MEASURED` consults only
@@ -75,10 +76,10 @@ Implemented:
   shapes, stride, dilation, groups, padding, qparam profile and memory class;
 - record `selection_basis` and the exact matched cost entry in the manifest;
 - make measured selection optimize one declared objective, initially latency,
-  while enforcing Flash and SRAM budgets;
+  while enforcing the declared SRAM arena budget;
 - when no matching measured entry exists, choose portable rather than guessing;
-- if a selected candidate exceeds a resource budget, retry the next feasible
-  candidate instead of failing after selection;
+- if a selected candidate exceeds the SRAM arena budget, retry a feasible
+  shared-scratch combination instead of failing after selection;
 - add deterministic tests for exact matches, absent measurements, stale
   toolchain/flags, resource rejection and tie handling.
 
@@ -88,6 +89,10 @@ Acceptance:
 - an empty measured table deterministically produces portable selections;
 - every non-portable measured selection cites immutable evidence in the
   generated manifest.
+
+Remaining: candidate-dependent packed constants are checked against Flash only
+after generation. Selecting the next Flash-feasible candidate requires a
+deterministic pre-emission size model and is not claimed here.
 
 ## R1A — Model-specialized portable Conv
 
@@ -623,7 +628,7 @@ Implemented:
 The implemented surface is TFLite schema version 3, one subgraph and one
 public input/output, static batch-one rank-2/3/4 INT8 activations, and these
 builtin versions only: `CONV_2D` v3, `DEPTHWISE_CONV_2D` v3,
-`FULLY_CONNECTED` v4 with bias or v6 without bias, `ADD` v2,
+`FULLY_CONNECTED` v4 with bias or v6 with optional bias, `ADD` v2,
 `AVERAGE_POOL_2D`/`MAX_POOL_2D` v2, `RESHAPE` v1, and `PAD`/`PADV2` v2. Fused
 activation is limited to `NONE`, `RELU`, and `RELU6`. The importer rejects
 dynamic, variable, and sparse tensors, custom ops, unsupported operator

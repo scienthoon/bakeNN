@@ -73,7 +73,7 @@ dependency.
 The importer currently accepts TFLite schema version 3 with one subgraph, one
 public input/output, static batch-one rank-2/3/4 INT8 activations, and these
 exact builtin versions: `CONV_2D` v3, `DEPTHWISE_CONV_2D` v3,
-`FULLY_CONNECTED` v4 with bias or v6 without bias, `ADD` v2,
+`FULLY_CONNECTED` v4 with bias or v6 with optional bias, `ADD` v2,
 `AVERAGE_POOL_2D`/`MAX_POOL_2D` v2, `RESHAPE` v1, and `PAD`/`PADV2` v2. Only
 fused `NONE`, `RELU`, and `RELU6` are accepted. Dynamic/variable/sparse tensors,
 external buffers, custom ops, unsupported versions, incompatible qparams,

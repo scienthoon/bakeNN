@@ -16,9 +16,10 @@ def _axis_map(input_size: int, output_size: int, align_corners: bool) -> tuple[t
     upper: list[int] = []
     weights: list[int] = []
     for output_index in range(output_size):
-        if align_corners and output_size > 1:
+        if align_corners:
             numerator = output_index * (input_size - 1)
-            denominator = output_size - 1
+            # A singleton aligned axis samples the first source coordinate.
+            denominator = max(output_size - 1, 1)
         else:
             numerator = (2 * output_index + 1) * input_size - output_size
             denominator = 2 * output_size

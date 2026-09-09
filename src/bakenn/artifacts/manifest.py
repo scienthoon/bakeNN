@@ -672,7 +672,7 @@ def validate_manifest(
         expected_files = set(paths) | {manifest_relative}
         if actual_files != expected_files:
             raise _fail(
-                "artifact tree file set differs from the signed inventory "
+                "artifact tree file set differs from the hashed inventory "
                 f"(missing={sorted(expected_files - actual_files)}, "
                 f"unexpected={sorted(actual_files - expected_files)})"
             )

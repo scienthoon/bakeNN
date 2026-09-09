@@ -1,12 +1,23 @@
 from __future__ import annotations
 
 import math
+from numbers import Integral
 
 from bakenn.errors import CompileError
 
 ARITHMETIC_PROFILE = "bakenn.int8.v1"
 INT32_MIN = -(1 << 31)
 INT32_MAX = (1 << 31) - 1
+
+
+def _integer(value: int, name: str) -> int:
+    # NumPy integer scalars otherwise keep fixed-width intermediates, including
+    # the INT32_MIN absolute value and the nominally wide Q31 product.
+    if type(value) is int:
+        return value
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    return int(value)
 
 
 def round_half_away_from_zero(value: float) -> int:
@@ -45,6 +56,8 @@ def _trunc_div(numerator: int, denominator: int) -> int:
 
 
 def saturating_rounding_doubling_high_mul(a: int, b: int) -> int:
+    a = _integer(a, "high-multiply input")
+    b = _integer(b, "high-multiply input")
     if not INT32_MIN <= a <= INT32_MAX or not INT32_MIN <= b <= INT32_MAX:
         raise OverflowError("high-multiply inputs must fit int32")
     if a == INT32_MIN and b == INT32_MIN:
@@ -55,6 +68,8 @@ def saturating_rounding_doubling_high_mul(a: int, b: int) -> int:
 
 
 def rounding_divide_by_pot(value: int, exponent: int) -> int:
+    value = _integer(value, "power-of-two dividend")
+    exponent = _integer(exponent, "power-of-two exponent")
     if not 0 <= exponent <= 31:
         raise ValueError("power-of-two divisor exponent must be in [0, 31]")
     if exponent == 0:
@@ -67,6 +82,11 @@ def rounding_divide_by_pot(value: int, exponent: int) -> int:
 
 
 def multiply_by_quantized_multiplier(value: int, multiplier: int, shift: int) -> int:
+    value = _integer(value, "accumulator")
+    multiplier = _integer(multiplier, "multiplier")
+    shift = _integer(shift, "shift")
+    if not -31 <= shift <= 30:
+        raise ValueError("requantization shift must be in [-31, 30]")
     if not INT32_MIN <= value <= INT32_MAX:
         raise OverflowError("accumulator must fit int32")
     left_shift = max(shift, 0)

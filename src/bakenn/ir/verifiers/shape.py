@@ -69,6 +69,10 @@ def _verify_slice(op: SliceOp, graph: QuantizedGraph) -> None:
         _fail(op, "Slice tensors must use canonical batch-one NC, NLC, or NHWC layout")
     if input_type.dtype is not DType.INT8 or output_type.dtype is not DType.INT8:
         _fail(op, "Slice tensors must be int8")
+    if not isinstance(input_type.qparams, PerTensorQParams) or not isinstance(
+        output_type.qparams, PerTensorQParams
+    ):
+        _fail(op, "Slice activations require per-tensor qparams")
     if input_type.layout is not output_type.layout or input_type.qparams != output_type.qparams:
         _fail(op, "Slice must preserve layout and qparams")
     rank = len(input_type.shape)
