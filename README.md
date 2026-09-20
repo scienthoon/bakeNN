@@ -11,6 +11,18 @@ calibration samples into a model-specialized, heap-free standalone C11 library
 for fixed-model MCU firmware.  It does not require TFLite, FlatBuffers or an
 interpreter on the target.
 
+Measured on physical boards against the same frozen workload, identical output bytes on every compared path:
+
+| Comparison | Latency / cycles | Linked Flash | Linked SRAM |
+|---|---:|---:|---:|
+| nRF52840 (M4, 64 MHz), INT8 FC, vs TFLM with the same CMSIS-NN kernel | **3,786** vs 5,418 cycles | **20,920 B** vs 69,640 B | **8,540 B** vs 11,040 B |
+| ESP32 240 MHz, MobileNetV2-0.25, vs TFLM + ESP-NN | **97.7 ms** vs 98.9 ms | app binary **465 KB** vs 666 KB | DRAM **31.9 KB** vs 95.3 KB |
+| Cortex-M4 section sizes, same graph, vs Apache TVM 0.16.0 AOT+USMP+CMSIS-NN | — | **12,088 B** vs 17,456 B | same 4,064 B workspace |
+
+These are scoped measurements for those frozen workloads on those boards, not a claim that BakeNN wins for every
+model or MCU. Protocols, hashes, raw UART and limitations are checked in under [`benchmarks/`](benchmarks/), and
+[the summary below](#physical-benchmark-summary) has the rest.
+
 ## Install
 
 ```bash
