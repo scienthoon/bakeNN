@@ -30,6 +30,10 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 
 ### Validation
 
+- compare the pinned ESP-NN 1.2.6 ESP32-S3 scratch mirror with the vendored
+  getters compiled for the host, over about 40,000 Conv2D/DepthwiseConv2D
+  geometries that reach every getter branch and over every layer of
+  MobileNetV2-0.25; previously a single shape was checked against constants;
 - add 149 regression/control cases and connect optional frontend and cross-build
   cases to their dependency-specific CI jobs; local full suite: 504 tests and
   6 subtests passed;
