@@ -328,6 +328,39 @@ def _validate_digest(value: object, name: str) -> str:
     return value
 
 
+def _validate_requantization_placement(
+    value: object,
+    *,
+    constant_payload_bytes: object,
+) -> None:
+    name = "backend.requantization_placement"
+    placement = _require_mapping(value, name)
+    _require_exact_keys(
+        placement,
+        name,
+        required={"memory", "attribute", "header", "bytes", "symbols"},
+    )
+    if placement["memory"] != "dram":
+        raise _fail(f"{name}.memory must be 'dram'")
+    if placement["attribute"] != "DRAM_ATTR":
+        raise _fail(f"{name}.attribute must be 'DRAM_ATTR'")
+    if placement["header"] != "esp_attr.h":
+        raise _fail(f"{name}.header must be 'esp_attr.h'")
+    placed_bytes = _require_int(placement["bytes"], f"{name}.bytes")
+    payload_bytes = _require_int(constant_payload_bytes, "constant_payload_bytes")
+    if placed_bytes > payload_bytes:
+        raise _fail(f"{name}.bytes cannot exceed constant_payload_bytes")
+    symbols = placement["symbols"]
+    if not isinstance(symbols, list):
+        raise _fail(f"{name}.symbols must be an array")
+    for index, symbol in enumerate(symbols):
+        _require_string(symbol, f"{name}.symbols[{index}]")
+    if symbols != sorted(set(symbols)):
+        raise _fail(f"{name}.symbols must be sorted and unique")
+    if bool(symbols) != bool(placed_bytes):
+        raise _fail(f"{name} symbols and bytes must both be empty or both be present")
+
+
 def validate_manifest(
     document: object,
     *,
@@ -464,7 +497,14 @@ def validate_manifest(
             "optimized_steps",
             "selections",
         },
+        # Written only by the ESP-IDF requantization_in_dram opt-in.
+        optional={"requantization_placement"},
     )
+    if "requantization_placement" in backend:
+        _validate_requantization_placement(
+            backend["requantization_placement"],
+            constant_payload_bytes=manifest["constant_payload_bytes"],
+        )
     _require_string(backend["name"], "backend.name")
     _require_mapping(backend["target"], "backend.target")
     _require_string(backend["kernel_policy"], "backend.kernel_policy")

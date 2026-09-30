@@ -42,7 +42,14 @@ from bakenn.reporting import MemoryReport, build_memory_report
 from . import families as _families
 from .contracts import ConstantEmission, KernelEmission, StepEmitContext, checked_emit_step
 from .formatting import c_float, format_values, guard, identifier, qparams_dict
-from .selection import CBackendOptions, CBackendPlan, select_backend_plan
+from .selection import (
+    ESP_IDF_DRAM_ATTRIBUTE,
+    ESP_IDF_DRAM_HEADER,
+    CBackendOptions,
+    CBackendPlan,
+    requantization_array_bytes,
+    select_backend_plan,
+)
 
 
 @dataclass(frozen=True)
@@ -387,6 +394,21 @@ void {symbol}_infer(
         raise CompileError(
             "generated constant payload exceeds the 32-bit target byte limit"
         )
+    requantization_in_dram = backend_plan.options.requantization_in_dram
+    # DRAM placement moves only the per-channel multiplier/shift arrays. Their
+    # initial values still live in the flash image, so they remain part of the
+    # constant payload and the Flash budget check below.
+    dram_symbols = frozenset(
+        item.symbol for item in constants if requantization_in_dram and item.requantization
+    )
+    dram_constant_bytes = sum(
+        item.size_bytes for item in constants if item.symbol in dram_symbols
+    )
+    if requantization_in_dram and dram_constant_bytes > requantization_array_bytes(plan):
+        raise CompileError(
+            "DRAM-resident requantization constants exceed the bytes reserved during "
+            "kernel selection"
+        )
     target = backend_plan.options.target
     if target.flash_bytes is not None and constant_bytes > target.flash_bytes:
         raise CompileError(
@@ -398,11 +420,22 @@ void {symbol}_infer(
             f"target {target.target_id} arena {backend_plan.arena_size} exceeds SRAM budget "
             f"{target.sram_bytes}; application globals and stack are not included"
         )
+    if (
+        target.sram_bytes is not None
+        and dram_constant_bytes
+        and backend_plan.arena_size + dram_constant_bytes > target.sram_bytes
+    ):
+        raise CompileError(
+            f"target {target.target_id} arena {backend_plan.arena_size} plus DRAM-resident "
+            f"requantization constants {dram_constant_bytes} exceed SRAM budget "
+            f"{target.sram_bytes}; application globals and stack are not included"
+        )
     constant_max_alignment = max((item.alignment for item in constants), default=1)
     memory_report = build_memory_report(
         plan,
         backend_plan,
         emitted_constant_payload_bytes=constant_bytes,
+        dram_constant_bytes=dram_constant_bytes if requantization_in_dram else None,
     )
     memory_report.write_json(memory_report_json)
     memory_report.write_text(memory_report_text)
@@ -414,9 +447,17 @@ void {symbol}_infer(
         + "\n\n#endif\n",
         encoding="utf-8",
     )
+    weights_includes = f'#include "{weights_header_name}"\n'
+    if dram_symbols:
+        weights_includes += f'#include "{ESP_IDF_DRAM_HEADER}"\n'
     weights_source.write_text(
-        f'#include "{weights_header_name}"\n\n'
-        + "\n\n".join(item.definition for item in constants)
+        weights_includes
+        + "\n"
+        + "\n\n".join(
+            (f"{ESP_IDF_DRAM_ATTRIBUTE} " if item.symbol in dram_symbols else "")
+            + item.definition
+            for item in constants
+        )
         + "\n",
         encoding="utf-8",
     )
@@ -466,6 +507,25 @@ void {symbol}_infer(
         for selection in backend_plan.selections
     ]
 
+    backend_manifest: dict[str, object] = {
+        "name": "c11",
+        "target": backend_plan.options.target.manifest(),
+        "kernel_policy": backend_plan.options.kernel_policy.value,
+        "weight_packing": backend_plan.options.enable_weight_packing,
+        "cmsis_nn_enabled": backend_plan.options.enable_cmsis_nn,
+        "esp_nn_enabled": backend_plan.options.enable_esp_nn,
+        "optimized_steps": sum(item.optimized for item in backend_plan.selections),
+        "selections": kernel_selections,
+    }
+    if requantization_in_dram:
+        # Present only for the opt-in so default manifests stay unchanged.
+        backend_manifest["requantization_placement"] = {
+            "memory": "dram",
+            "attribute": ESP_IDF_DRAM_ATTRIBUTE,
+            "header": ESP_IDF_DRAM_HEADER,
+            "bytes": dram_constant_bytes,
+            "symbols": sorted(dram_symbols),
+        }
     manifest_data = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "c_abi_version": GENERATED_C_ABI_VERSION,
@@ -475,16 +535,7 @@ void {symbol}_infer(
         "arithmetic_profile": plan.arithmetic_profile,
         "arithmetic_profile_version": ARITHMETIC_PROFILE_VERSION,
         "graph_fingerprints": canonical_plan_fingerprints(plan),
-        "backend": {
-            "name": "c11",
-            "target": backend_plan.options.target.manifest(),
-            "kernel_policy": backend_plan.options.kernel_policy.value,
-            "weight_packing": backend_plan.options.enable_weight_packing,
-            "cmsis_nn_enabled": backend_plan.options.enable_cmsis_nn,
-            "esp_nn_enabled": backend_plan.options.enable_esp_nn,
-            "optimized_steps": sum(item.optimized for item in backend_plan.selections),
-            "selections": kernel_selections,
-        },
+        "backend": backend_manifest,
         "arena_bytes": backend_plan.arena_size,
         "activation_arena_bytes": backend_plan.activation_arena_size,
         "scratch_bytes": backend_plan.scratch_size,

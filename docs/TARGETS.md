@@ -39,6 +39,13 @@ and pooling source closures; ESP32-C3 intentionally remains portable because
 the pinned ESP-NN revision has no matching optimized C3 contract. Every fallback
 preserves the same verified INT8 semantics and is recorded in the manifest.
 
+ESP-IDF targets also accept the `requantization_in_dram` backend opt-in. It
+prefixes each per-channel multiplier/shift array definition with ESP-IDF's
+`DRAM_ATTR` (from `esp_attr.h`), reserves those bytes against a declared
+`sram_bytes` budget before kernel selection, and records them in
+`backend.requantization_placement` and the memory report. Non-ESP-IDF targets
+reject the option at compile time instead of emitting an unknown attribute.
+
 The Cortex-M4 profile can select versioned `SMLAD` Linear, 1x1 Conv, depthwise
 3x3 and im2col 3x3 Conv kernels plus specialized global-average and 2x2
 max-pool loops. Cross-compilation proves the instructions and link contract;

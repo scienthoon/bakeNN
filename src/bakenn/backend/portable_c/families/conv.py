@@ -54,12 +54,15 @@ def _pack_signed_i8_pairs(rows: np.ndarray) -> np.ndarray:
 
 
 def _int32_constant(symbol: str, values: tuple[int, ...]) -> ConstantEmission:
+    """Emit one per-channel requantization multiplier or shift array."""
+
     array = np.asarray(values, dtype=np.int32)
     return ConstantEmission(
         symbol=symbol,
         declaration=f"extern const int32_t {symbol}[{len(values)}];",
         definition=f"const int32_t {symbol}[{len(values)}] = {{\n{format_values(array)}\n}};",
         size_bytes=int(array.nbytes),
+        requantization=True,
     )
 
 

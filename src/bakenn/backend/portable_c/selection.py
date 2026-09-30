@@ -36,6 +36,12 @@ class CBackendOptions:
     deterministic capability-priority selection.  ``AUTO`` retains that same
     behavior only as a deprecated compatibility spelling.  ``MEASURED`` uses
     exact physical-cost entries and otherwise falls back to portable C.
+
+    ``requantization_in_dram`` is an ESP-IDF-only opt-in that places every
+    per-channel multiplier and shift array in internal DRAM with ``DRAM_ATTR``
+    instead of flash-mapped read-only data.  It trades static DRAM for fewer
+    flash-cache reads in the inner loops; those bytes are reserved against the
+    declared SRAM budget and reported.  The default keeps them in flash.
     """
 
     kernel_policy: KernelPolicy = KernelPolicy.PORTABLE
@@ -43,6 +49,7 @@ class CBackendOptions:
     enable_cmsis_nn: bool = False
     enable_esp_nn: bool = False
     target: TargetDescriptor = PORTABLE_32
+    requantization_in_dram: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.kernel_policy, KernelPolicy):
@@ -63,6 +70,30 @@ class CBackendOptions:
             raise ValueError("enable_esp_nn must be boolean")
         if not isinstance(self.target, TargetDescriptor):
             raise ValueError("target must be a TargetDescriptor")
+        if not isinstance(self.requantization_in_dram, bool):
+            raise ValueError("requantization_in_dram must be boolean")
+
+
+ESP_IDF_DRAM_ATTRIBUTE = "DRAM_ATTR"
+ESP_IDF_DRAM_HEADER = "esp_attr.h"
+
+
+def requantization_array_bytes(plan: ExecutionPlan) -> int:
+    """Return the bytes of per-channel multiplier/shift arrays a plan emits.
+
+    Every step carrying per-channel ``multipliers`` and ``shifts`` emits them
+    as two int32 arrays, except a kernel that passes one per-tensor pair as
+    immediates.  This is therefore an upper bound used to reserve SRAM before
+    kernel selection; the generator accounts the exact emitted bytes.
+    """
+
+    total = 0
+    for step in plan.steps:
+        multipliers = getattr(step, "multipliers", None)
+        shifts = getattr(step, "shifts", None)
+        if isinstance(multipliers, tuple) and isinstance(shifts, tuple):
+            total += 4 * (len(multipliers) + len(shifts))
+    return total
 
 
 @dataclass(frozen=True, eq=False)
@@ -689,9 +720,27 @@ def _sram_feasible_capabilities(
     execution order; this does not claim a globally measured fastest graph.
     """
 
-    budget = options.target.sram_bytes
-    if budget is None:
+    declared_budget = options.target.sram_bytes
+    if declared_budget is None:
         return rows, None
+    # DRAM-resident requantization arrays are static data outside the arena;
+    # reserve them first so the arena search only uses the remaining budget.
+    reserved = requantization_array_bytes(plan) if options.requantization_in_dram else 0
+    if reserved > declared_budget:
+        raise CompileError(
+            f"target {options.target.target_id} DRAM-resident requantization constants "
+            f"{reserved} exceed SRAM budget {declared_budget}; application globals and "
+            "stack are not included"
+        )
+    budget = declared_budget - reserved
+    budget_text = (
+        f"{declared_budget}"
+        if not reserved
+        else (
+            f"{declared_budget} after reserving {reserved} bytes of DRAM-resident "
+            "requantization constants"
+        )
+    )
     # Validate the original candidate sets first. A malformed registration or
     # unsupported policy must not be mistaken for a resource fallback.
     preferred = tuple(
@@ -703,7 +752,7 @@ def _sram_feasible_capabilities(
     if minimum_arena > budget:
         raise CompileError(
             f"target {options.target.target_id} minimum arena {minimum_arena} exceeds "
-            f"SRAM budget {budget}; application globals and stack are not included"
+            f"SRAM budget {budget_text}; application globals and stack are not included"
         )
     preferred_size = max((plan.scratch_size, *(item.capability.scratch_size for item in preferred)))
     preferred_alignment = max((
@@ -759,13 +808,13 @@ def _sram_feasible_capabilities(
         if best_key is None or key < best_key:
             best_key, best_rows = key, feasible
             best_note = (
-                f"excluded by SRAM budget {budget}: the selected shared-scratch "
+                f"excluded by SRAM budget {budget_text}: the selected shared-scratch "
                 f"envelope permits at most {capacity} bytes with alignment <= {alignment}"
             )
     if best_rows is None:
         raise CompileError(
             f"target {options.target.target_id}: kernel policy {options.kernel_policy.value} "
-            f"has no supported implementation within SRAM budget {budget}; "
+            f"has no supported implementation within SRAM budget {budget_text}; "
             "application globals and stack are not included"
         )
     return best_rows, best_note
@@ -783,6 +832,15 @@ def select_backend_plan(
     resolved_options = CBackendOptions() if options is None else options
     if not isinstance(resolved_options, CBackendOptions):
         raise TypeError("options must be CBackendOptions")
+    if (
+        resolved_options.requantization_in_dram
+        and resolved_options.target.abi != "esp-idf"
+    ):
+        raise CompileError(
+            f"requantization_in_dram uses ESP-IDF {ESP_IDF_DRAM_ATTRIBUTE} placement and "
+            "requires an ESP-IDF target (esp32, esp32s3, esp32c3); got "
+            f"{resolved_options.target.target_id}"
+        )
     selections: list[KernelSelection] = []
     packed: dict[str, PackedConstant] = {}
     capability_rows = tuple(
@@ -893,11 +951,14 @@ def select_backend_plan(
 __all__ = [
     "CBackendOptions",
     "CBackendPlan",
+    "ESP_IDF_DRAM_ATTRIBUTE",
+    "ESP_IDF_DRAM_HEADER",
     "KernelCapability",
     "KernelPolicy",
     "KernelSelection",
     "PackedConstant",
     "canonical_workload_key",
     "kernel_capabilities",
+    "requantization_array_bytes",
     "select_backend_plan",
 ]

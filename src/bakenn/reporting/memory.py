@@ -122,6 +122,10 @@ class MemoryReport:
     steps: tuple[KernelStepMemory, ...]
     peak_working_payload_bytes: int
     peak_step_indices: tuple[int, ...]
+    # Set only for the ESP-IDF requantization_in_dram opt-in: multiplier/shift
+    # arrays placed in internal DRAM.  They stay in the constant payload too,
+    # because their initial values are loaded from the flash image.
+    dram_constant_bytes: int | None = None
 
     @property
     def caller_io_bytes(self) -> int:
@@ -143,6 +147,39 @@ class MemoryReport:
             if self.target_sram_budget_bytes is None
             else self.target_sram_budget_bytes - self.arena_bytes
         )
+        compile_time: dict[str, object] = {
+            "semantic_constant_bytes": self.semantic_constant_bytes,
+            "emitted_constant_payload_bytes": self.emitted_constant_payload_bytes,
+            "input_bytes": self.input_bytes,
+            "output_bytes": self.output_bytes,
+            "caller_io_bytes": self.caller_io_bytes,
+            "activation_arena_bytes": self.activation_arena_bytes,
+            "scratch_bytes": self.scratch_bytes,
+            "scratch_offset": self.scratch_offset,
+            "arena_bytes": self.arena_bytes,
+            "arena_alignment": self.arena_alignment,
+            "generated_model_heap_calls": self.generated_model_heap_calls,
+        }
+        target_budgets: dict[str, object] = {
+            "flash_bytes": self.target_flash_budget_bytes,
+            "constant_payload_headroom_bytes": flash_headroom,
+            "constant_payload_headroom_scope": "generated code and initialized data excluded",
+            "sram_bytes": self.target_sram_budget_bytes,
+            "arena_headroom_bytes": arena_headroom,
+            "arena_headroom_scope": "caller I/O, application globals, and stacks excluded",
+        }
+        if self.dram_constant_bytes is not None:
+            # Keys appear only for the opt-in so default reports stay unchanged.
+            compile_time["dram_resident_constant_bytes"] = self.dram_constant_bytes
+            compile_time["dram_resident_constant_scope"] = (
+                "per-channel requantization arrays placed with DRAM_ATTR; "
+                "also counted in the emitted constant payload"
+            )
+            target_budgets["sram_headroom_after_dram_constants_bytes"] = (
+                None
+                if arena_headroom is None
+                else arena_headroom - self.dram_constant_bytes
+            )
         return {
             "schema_version": 1,
             "compiler_version": VERSION,
@@ -153,27 +190,8 @@ class MemoryReport:
                 "arena_excludes_caller_io": True,
                 "constant_payload_is_not_final_flash": True,
             },
-            "compile_time": {
-                "semantic_constant_bytes": self.semantic_constant_bytes,
-                "emitted_constant_payload_bytes": self.emitted_constant_payload_bytes,
-                "input_bytes": self.input_bytes,
-                "output_bytes": self.output_bytes,
-                "caller_io_bytes": self.caller_io_bytes,
-                "activation_arena_bytes": self.activation_arena_bytes,
-                "scratch_bytes": self.scratch_bytes,
-                "scratch_offset": self.scratch_offset,
-                "arena_bytes": self.arena_bytes,
-                "arena_alignment": self.arena_alignment,
-                "generated_model_heap_calls": self.generated_model_heap_calls,
-            },
-            "target_budgets": {
-                "flash_bytes": self.target_flash_budget_bytes,
-                "constant_payload_headroom_bytes": flash_headroom,
-                "constant_payload_headroom_scope": "generated code and initialized data excluded",
-                "sram_bytes": self.target_sram_budget_bytes,
-                "arena_headroom_bytes": arena_headroom,
-                "arena_headroom_scope": "caller I/O, application globals, and stacks excluded",
-            },
+            "compile_time": compile_time,
+            "target_budgets": target_budgets,
             "peak_live_working_payload": {
                 "bytes": self.peak_working_payload_bytes,
                 "step_indices": list(self.peak_step_indices),
@@ -203,6 +221,14 @@ class MemoryReport:
             "Compile-time exact",
             f"  Semantic constants       {_format_bytes(self.semantic_constant_bytes)}",
             f"  Emitted constant payload {_format_bytes(self.emitted_constant_payload_bytes)}",
+            *(
+                ()
+                if self.dram_constant_bytes is None
+                else (
+                    f"  DRAM-resident constants  {_format_bytes(self.dram_constant_bytes)} "
+                    "(requantization arrays via DRAM_ATTR; also in constant payload)",
+                )
+            ),
             f"  Activation arena         {_format_bytes(self.activation_arena_bytes)}",
             f"  Kernel scratch           {_format_bytes(self.scratch_bytes)}",
             f"  Total model arena        {_format_bytes(self.arena_bytes)}",
@@ -225,6 +251,12 @@ class MemoryReport:
                     f"  SRAM arena headroom      {_format_bytes(headroom)} "
                     "(caller I/O/app/stack excluded)"
                 )
+                if self.dram_constant_bytes is not None:
+                    lines.append(
+                        "  SRAM after DRAM consts   "
+                        f"{_format_bytes(headroom - self.dram_constant_bytes)} "
+                        "(arena and DRAM-resident constants deducted)"
+                    )
 
         lines.extend(("", "Peak live working payload"))
         if self.peak_step_indices:
@@ -390,6 +422,7 @@ def build_memory_report(
     backend_plan: "CBackendPlan",
     *,
     emitted_constant_payload_bytes: int,
+    dram_constant_bytes: int | None = None,
 ) -> MemoryReport:
     """Build the report from one immutable semantic and selected backend plan."""
 
@@ -397,6 +430,12 @@ def build_memory_report(
         raise ValueError("memory report requires the backend plan for the same execution plan")
     if emitted_constant_payload_bytes < 0:
         raise ValueError("emitted constant payload cannot be negative")
+    if dram_constant_bytes is not None and not (
+        0 <= dram_constant_bytes <= emitted_constant_payload_bytes
+    ):
+        raise ValueError(
+            "DRAM-resident constants must be a non-negative part of the constant payload"
+        )
     buffers = _arena_buffers(plan)
     buffer_by_name = {item.name: item for item in buffers}
     step_reports: list[KernelStepMemory] = []
@@ -447,6 +486,7 @@ def build_memory_report(
         steps=steps,
         peak_working_payload_bytes=peak,
         peak_step_indices=peak_indices,
+        dram_constant_bytes=dram_constant_bytes,
     )
 
 
