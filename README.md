@@ -535,6 +535,15 @@ the real Xtensa sources are compiled in boardless ESP-IDF CI. Actual S3 SIMD
 cycles, cache behavior and energy still require a physical ESP32-S3 and are not
 claimed here.
 
+On ESP-IDF targets, `CBackendOptions(requantization_in_dram=True)` is an
+explicit opt-in that places every per-channel multiplier and shift array in
+internal DRAM with ESP-IDF's `DRAM_ATTR` instead of flash-mapped read-only data.
+It changes placement only; kernels, arithmetic and output bytes are unchanged.
+The arrays still occupy the flash image for initialization, are reserved
+against a declared SRAM budget before kernel selection, and are listed in the
+manifest (`backend.requantization_placement`) and memory report. The default
+keeps them in flash. BakeNN has not measured the latency effect itself.
+
 Target selection is optional. `portable32` remains the default; ARM/RISC-V
 profiles add exact ABI/alignment/compiler metadata and ESP profiles can emit an
 ESP-IDF component/project:

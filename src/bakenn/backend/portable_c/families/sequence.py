@@ -11,8 +11,10 @@ from ..formatting import format_values
 
 
 def _int32_constant(symbol: str, values: tuple[int, ...]) -> ConstantEmission:
+    """Emit one per-channel requantization multiplier or shift array."""
+
     array = np.asarray(values, dtype=np.int32)
-    return ConstantEmission(symbol, f"extern const int32_t {symbol}[{len(values)}];", f"const int32_t {symbol}[{len(values)}] = {{\n{format_values(array)}\n}};", int(array.nbytes))
+    return ConstantEmission(symbol, f"extern const int32_t {symbol}[{len(values)}];", f"const int32_t {symbol}[{len(values)}] = {{\n{format_values(array)}\n}};", int(array.nbytes), requantization=True)
 
 
 def _conv_kernel(context: StepEmitContext) -> KernelEmission:

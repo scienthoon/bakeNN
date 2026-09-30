@@ -14,19 +14,26 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ConstantEmission:
-    """One immutable C constant declaration/definition pair."""
+    """One immutable C constant declaration/definition pair.
+
+    ``requantization`` marks per-channel multiplier/shift arrays so the
+    generator can apply an opt-in target placement without parsing C text.
+    """
 
     symbol: str
     declaration: str
     definition: str
     size_bytes: int
     alignment: int = 1
+    requantization: bool = False
 
     def __post_init__(self) -> None:
         if not self.symbol or not self.declaration or not self.definition:
             raise ValueError("C constant emissions must be complete")
         if self.size_bytes < 0:
             raise ValueError("C constant sizes cannot be negative")
+        if not isinstance(self.requantization, bool):
+            raise ValueError("C constant requantization marker must be boolean")
         if (
             isinstance(self.alignment, bool)
             or not isinstance(self.alignment, int)

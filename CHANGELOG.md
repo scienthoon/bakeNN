@@ -5,6 +5,14 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 
 ## Unreleased
 
+### Added
+
+- opt-in `CBackendOptions(requantization_in_dram=True)` for ESP-IDF targets:
+  places per-channel multiplier/shift arrays in internal DRAM with `DRAM_ATTR`,
+  reserves them against a declared SRAM budget before kernel selection, and
+  records them in `backend.requantization_placement` and the memory report;
+  default artifacts are byte-for-byte unchanged;
+
 ### Fixed
 
 - preserve unique TFLite tensor/constant identities and float32 RELU6 rounding;

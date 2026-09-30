@@ -555,6 +555,14 @@ ESP32-S3 래퍼는 공식 ESP-NN ANSI 오라클을 통해 호스트에서 검사
 cycle, 캐시 동작, 에너지는 여전히 물리 ESP32-S3에서 측정해야 하며
 여기서는 주장하지 않습니다.
 
+ESP-IDF 타깃에서는 `CBackendOptions(requantization_in_dram=True)`를 명시적으로
+켜면 채널별 multiplier와 shift 배열을 flash에 매핑된 읽기 전용 데이터 대신
+ESP-IDF `DRAM_ATTR`로 내부 DRAM에 배치합니다. 배치만 바뀌며 커널, 산술,
+출력 바이트는 그대로입니다. 초기값 때문에 배열은 flash 이미지에도 계속
+남고, 선언된 SRAM 예산에서는 커널 선택 전에 먼저 예약되며, 매니페스트
+(`backend.requantization_placement`)와 메모리 보고서에 기록됩니다. 기본값은
+flash 배치입니다. 지연 시간 효과는 BakeNN이 직접 측정하지 않았습니다.
+
 타깃 선택은 선택 사항입니다. `portable32`가 기본값으로 유지됩니다.
 ARM/RISC-V 프로필은 정확한 ABI/정렬/컴파일러 메타데이터를 추가하고,
 ESP 프로필은 ESP-IDF 구성 요소/프로젝트를 생성할 수 있습니다.

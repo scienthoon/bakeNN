@@ -22,6 +22,8 @@ def _uint32_constant(symbol: str, values: tuple[int, ...]) -> ConstantEmission:
 
 
 def _int32_constant(symbol: str, values: tuple[int, ...]) -> ConstantEmission:
+    """Emit one per-channel requantization multiplier or shift array."""
+
     array = np.asarray(values, dtype=np.int32)
     return ConstantEmission(
         symbol,
@@ -29,6 +31,7 @@ def _int32_constant(symbol: str, values: tuple[int, ...]) -> ConstantEmission:
         f"const int32_t {symbol}[{array.size}] = {{\n{format_values(array)}\n}};",
         int(array.nbytes),
         alignment=4,
+        requantization=True,
     )
 
 
