@@ -53,6 +53,7 @@ jobs:
           tests/p0/test_ptq_graph.py
           tests/p0/test_torch_models_c.py
           tests/p2/test_cmsis_nn_fc.py
+          tests/p2/test_esp_nn_scratch_agreement.py
           tests/p3/test_esp32s3_demo.py
           tests/p3/test_mobilenet_v2_example.py
           tests/p3/test_model_zoo_c.py
