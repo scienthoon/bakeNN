@@ -10,6 +10,7 @@ import numpy as np
 
 import bakenn
 from bakenn.ir import (
+    AddOp,
     Conv2DOp,
     DType,
     DepthwiseConv2DOp,
@@ -17,6 +18,7 @@ from bakenn.ir import (
     PerAxisQParams,
     PerTensorQParams,
     QuantizedGraph,
+    RequantizeOp,
     TensorType,
 )
 
@@ -56,10 +58,16 @@ def smoke_graph() -> object:
 
 
 def esp_nn_smoke_graph() -> QuantizedGraph:
-    """Small Conv+Depthwise graph that forces both ESP-NN spatial paths."""
+    """Small Conv+Depthwise graph with a residual Add.
+
+    It forces both ESP-NN spatial paths and, on ESP32-S3, the ESP-NN Add
+    assembly. The final Requantize keeps the Add operands in the arena.
+    """
 
     input_q = PerTensorQParams(0.25, -7)
     hidden_q = PerTensorQParams(0.5, 3)
+    depthwise_q = PerTensorQParams(0.75, -2)
+    residual_q = PerTensorQParams(1.0, 4)
     output_q = PerTensorQParams(0.75, -2)
     conv_scales = (0.125, 0.25, 0.375, 0.5)
     depthwise_scales = (0.25, 0.375, 0.5, 0.625)
@@ -108,6 +116,8 @@ def esp_nn_smoke_graph() -> QuantizedGraph:
                     0,
                 ),
             ),
+            "depthwise_out": TensorType((1, 4, 4, 4), DType.INT8, Layout.NHWC, depthwise_q),
+            "residual": TensorType((1, 4, 4, 4), DType.INT8, Layout.NHWC, residual_q),
             "output": TensorType((1, 4, 4, 4), DType.INT8, Layout.NHWC, output_q),
         },
         constants={
@@ -131,11 +141,13 @@ def esp_nn_smoke_graph() -> QuantizedGraph:
                 "hidden",
                 "depthwise_weight",
                 "depthwise_bias",
-                "output",
+                "depthwise_out",
                 padding=(1, 1, 1, 1),
                 activation_min=-101,
                 activation_max=103,
             ),
+            AddOp("residual_add", "hidden", "depthwise_out", "residual"),
+            RequantizeOp("output_requantize", "residual", "output"),
         ),
         inputs=("input",),
         outputs=("output",),

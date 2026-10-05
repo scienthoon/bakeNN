@@ -18,6 +18,15 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
   reserves them against a declared SRAM budget before kernel selection, and
   records them in `backend.requantization_placement` and the memory report;
   default artifacts are byte-for-byte unchanged;
+- ESP32-S3 lowering of same-shape Add to the pinned ESP-NN 1.2.6
+  `esp_nn_add_elementwise_s8` assembly (`esp_nn.esp32s3.add_s8.v1.2.6`).
+  It is selected only for 16-byte-aligned arena operands and shifts in
+  [-30, 0], whose bounds keep the assembly's rounding identical to
+  `bakenn.int8.v1`. The host checks it byte for byte through ESP-NN's ANSI
+  oracle, and the ESP-IDF smoke build now assembles it. Broadcast Adds, Adds on
+  caller-owned model I/O, and every other target keep the portable kernel.
+  Generated C is unchanged when it is not selected; manifests now list it as
+  a rejected candidate;
 
 ### Changed
 
