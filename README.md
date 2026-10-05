@@ -655,10 +655,11 @@ reference.
 
 CI runs the dependency-light suite on Python 3.10, 3.11, 3.12, and 3.13 with
 both GCC and Clang. The framework matrix additionally exercises Torch
-2.9/torchvision 0.24 on Python 3.10 and Torch 2.10/torchvision 0.25 on Python
-3.13, including wheel build and clean-install checks. Those are the supported
-v1 framework endpoints; older Torch export IR dialects are rejected rather
-than interpreted approximately.
+2.9/torchvision 0.24 on Python 3.10, Torch 2.12/torchvision 0.27 on Python
+3.12, and Torch 2.10/torchvision 0.25 and Torch 2.14/torchvision 0.29 on Python
+3.13, including wheel build and clean-install checks. Torch 2.9 through 2.14 is
+the supported range; older Torch export IR dialects are rejected rather than
+interpreted approximately.
 
 Generated models expose a raw caller-owned arena pointer. Allocate exactly the
 reported `*_ARENA_SIZE` bytes with `*_ARENA_ALIGNMENT`; pass `NULL` when the
