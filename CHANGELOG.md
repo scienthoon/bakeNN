@@ -36,6 +36,14 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 - preserve measured optimization flags during freestanding builds and reject
   conflicting build overrides.
 
+### Dependencies
+
+- the `torch` and `model-zoo` extras accept PyTorch 2.9 through 2.14 and
+  torchvision 0.24 through 0.29 (previously 2.9 to 2.10 and 0.24 to 0.25). CI
+  adds Torch 2.12 and 2.14 jobs. Torch 2.14 exports later uses of an
+  eval-dropout alias as the mutated value, so that one in-place pattern is now
+  captured instead of refused; the capture reproduces the eager result;
+
 ### Validation
 
 - compare the pinned ESP-NN 1.2.6 ESP32-S3 scratch mirror with the vendored
