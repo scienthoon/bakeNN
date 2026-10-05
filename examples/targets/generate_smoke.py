@@ -154,6 +154,11 @@ def main() -> None:
     parser.add_argument("--cross-build", action="store_true")
     parser.add_argument("--esp-idf", action="store_true")
     parser.add_argument(
+        "--arduino",
+        action="store_true",
+        help="export an Arduino library; requires a board-independent target such as portable32",
+    )
+    parser.add_argument(
         "--esp-nn",
         action="store_true",
         help="select pinned ESP-NN kernels and use a Conv+Depthwise smoke graph",
@@ -187,6 +192,11 @@ def main() -> None:
             compiled.artifacts, descriptor, arguments.output / "esp_idf"
         )
         print(project.root)
+    if arguments.arduino:
+        library = bakenn.export_arduino_library(
+            compiled.artifacts, arguments.output / "arduino"
+        )
+        print(library.root)
     if arguments.zephyr_board:
         project = bakenn.export_zephyr_project(
             compiled.artifacts,

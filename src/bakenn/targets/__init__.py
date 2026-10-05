@@ -18,10 +18,12 @@ from .freestanding import (
     build_freestanding_elf,
     discover_gnu_toolchain,
 )
+from .arduino import ArduinoLibrary, export_arduino_library
 from .esp_idf import ESPIDFProject, export_esp_idf_component, export_esp_idf_project
 from .zephyr import ZephyrProject, export_zephyr_project
 
 __all__ = [
+    "ArduinoLibrary",
     "CORTEX_M0PLUS",
     "CORTEX_M4",
     "ESP32",
@@ -39,6 +41,7 @@ __all__ = [
     "ZephyrProject",
     "build_freestanding_elf",
     "discover_gnu_toolchain",
+    "export_arduino_library",
     "export_esp_idf_component",
     "export_esp_idf_project",
     "export_zephyr_project",

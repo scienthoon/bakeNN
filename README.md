@@ -582,6 +582,24 @@ the original ESP32 MobileNetV2 comparison is recorded under
 [`benchmarks/esp32/results`](benchmarks/esp32/results). ESP32-S3 SIMD cycles
 and whole-firmware energy remain unmeasured. See [the target-layer contract](docs/TARGETS.md).
 
+A board-independent model can also be packaged as an Arduino library:
+
+```python
+compiled = bakenn.compile(graph, "build/model")
+library = bakenn.export_arduino_library(
+    compiled.artifacts, "Arduino/libraries/my_model"
+)
+```
+
+The library holds the generated C under `src/` and an `Infer` example sketch
+that calls the model and prints its timing and output codes. It builds with any
+32-bit Arduino core; CI compiles it for the Nano 33 IoT (Cortex-M0+), UNO R4
+Minima and Nano 33 BLE (Cortex-M4). Those are boardless builds, not on-board
+measurements. Artifacts that bundle CMSIS-NN or ESP-NN, select target-specific
+kernels or use `requantization_in_dram` are rejected, because an Arduino
+library cannot add the include paths and compile definitions they need. 8-bit
+AVR boards are out of scope.
+
 `STATIC_PRIORITY` chooses by capability predicate and declared priority; it
 does not promise lower latency, Flash, or energy. `MEASURED` consults only an
 exact physical cost entry for the canonical workload, target, toolchain, and
