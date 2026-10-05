@@ -603,6 +603,24 @@ nRF52840DK/Cortex-M4 벤치마크를 다룹니다. 원본 ESP32 MobileNetV2
 측정되지 않았습니다.
 [타깃 계층 계약](docs/TARGETS.md)을 참조하십시오.
 
+보드에 의존하지 않는 모델은 Arduino 라이브러리로도 내보낼 수 있습니다.
+
+```python
+compiled = bakenn.compile(graph, "build/model")
+library = bakenn.export_arduino_library(
+    compiled.artifacts, "Arduino/libraries/my_model"
+)
+```
+
+라이브러리의 `src/`에는 생성된 C가 들어가고, 모델을 호출해 실행 시간과
+출력 코드를 인쇄하는 `Infer` 예제 스케치가 함께 들어갑니다. 32비트
+Arduino 코어라면 어디서든 빌드됩니다. CI는 Nano 33 IoT(Cortex-M0+),
+UNO R4 Minima, Nano 33 BLE(Cortex-M4)용으로 컴파일합니다. 이는 보드 없는
+빌드이며 실보드 측정이 아닙니다. CMSIS-NN이나 ESP-NN을 포함한 산출물,
+타깃 전용 커널을 선택한 산출물, `requantization_in_dram`을 쓴 산출물은
+거부합니다. Arduino 라이브러리는 이들에 필요한 include 경로와 컴파일
+정의를 추가할 수 없기 때문입니다. 8비트 AVR 보드는 지원 범위가 아닙니다.
+
 `STATIC_PRIORITY`는 기능 조건자와 선언된 우선순위에 따라 선택합니다.
 더 낮은 지연 시간, Flash 또는 에너지를 보장하지 않습니다. `MEASURED`는
 정규 워크로드, 타깃, 툴체인, 플래그가 정확히 일치하는 물리 비용 항목만

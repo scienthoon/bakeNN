@@ -42,6 +42,7 @@ from .reference import (
 )
 from .reporting import MemoryReport, build_memory_report
 from .targets import (
+    ArduinoLibrary,
     CORTEX_M0PLUS,
     CORTEX_M4,
     ESP32,
@@ -56,6 +57,7 @@ from .targets import (
     TargetBuildReport,
     build_freestanding_elf,
     ESPIDFProject,
+    export_arduino_library,
     export_esp_idf_component,
     export_esp_idf_project,
     export_zephyr_project,
@@ -64,6 +66,7 @@ from .targets import (
 )
 
 __all__ = [
+    "ArduinoLibrary",
     "CompileError",
     "CompiledModel",
     "CORTEX_M0PLUS",
@@ -106,6 +109,7 @@ __all__ = [
     "compile_tflite",
     "compile_torch_ptq",
     "dequantize_output",
+    "export_arduino_library",
     "export_esp_idf_component",
     "export_esp_idf_project",
     "export_zephyr_project",

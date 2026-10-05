@@ -137,6 +137,37 @@ exports leave the destination and source artifact closure unchanged. To add a
 model to an existing application, export its component into a new directory
 and integrate that component deliberately.
 
+## Arduino library packaging
+
+```python
+compiled = bakenn.compile(graph, "build/model")
+library = bakenn.export_arduino_library(
+    compiled.artifacts,
+    "Arduino/libraries/my_model",
+)
+```
+
+The export follows the Arduino library layout: `library.properties`, the
+complete generated artifact set under `src/`, and `examples/Infer/Infer.ino`.
+Arduino compiles the C sources in `src/` and ignores the manifest and memory
+reports beside them, so the copied manifest still verifies. The sketch feeds a
+zero-point input and prints `micros()` timing and the INT8 output codes; replace
+the input with real quantized data. `name` and `version` set the corresponding
+`library.properties` fields and default to the model symbol and `1.0.0`.
+
+Only board-independent artifacts are accepted: every selected kernel must be
+`portable.*` or `optimized.*`, with no bundled CMSIS-NN or ESP-NN sources and
+no `requantization_in_dram`. An Arduino library cannot add include paths or
+compile definitions, so those artifacts fail at export time instead of at the
+user's first build. Like the other exports, it requires an absent or empty
+destination and publishes atomically.
+
+CI builds the example with `arduino-cli` for `arduino:samd:nano_33_iot`,
+`arduino:renesas_uno:minima` and `arduino:mbed_nano:nano33ble`. That proves the
+library and sketch compile and link with those cores' toolchains; it is not an
+on-board run. 8-bit AVR boards are out of scope: the generated C assumes a
+32-bit target, and AVR needs `PROGMEM` access for constants.
+
 ## Measured cost tables
 
 `KernelCostMeasurement` accepts only positive cycle counts with a kernel id,

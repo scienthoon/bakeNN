@@ -7,6 +7,12 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 
 ### Added
 
+- `bakenn.export_arduino_library()`: packages a board-independent model as an
+  Arduino library (`library.properties`, generated C under `src/`, and an
+  `Infer` example sketch). Artifacts with bundled vendor kernels,
+  target-specific kernels or `requantization_in_dram` are rejected at export.
+  CI builds the example with `arduino-cli` for the Nano 33 IoT, UNO R4 Minima
+  and Nano 33 BLE;
 - opt-in `CBackendOptions(requantization_in_dram=True)` for ESP-IDF targets:
   places per-channel multiplier/shift arrays in internal DRAM with `DRAM_ATTR`,
   reserves them against a declared SRAM budget before kernel selection, and
