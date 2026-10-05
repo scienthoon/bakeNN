@@ -33,15 +33,14 @@ int32_t {round_pot}(int32_t value, int32_t exponent) {{
     if (exponent == 0) {{
         return value;
     }}
-    const uint64_t magnitude =
-        value < 0 ? (uint64_t)(-(int64_t)value) : (uint64_t)value;
-    uint64_t quotient = magnitude >> (uint32_t)exponent;
-    const uint64_t remainder =
-        magnitude & ((UINT64_C(1) << (uint32_t)exponent) - UINT64_C(1));
-    if (remainder >= (UINT64_C(1) << (uint32_t)(exponent - 1))) {{
-        ++quotient;
-    }}
-    return value < 0 ? (int32_t)(-(int64_t)quotient) : (int32_t)quotient;
+    /* |INT32_MIN| fits uint32_t and exponent >= 1 keeps the quotient below
+       2^31, so 32-bit arithmetic is exact for every int32 value. */
+    const uint32_t magnitude =
+        value < 0 ? UINT32_C(0) - (uint32_t)value : (uint32_t)value;
+    const uint32_t mask = (UINT32_C(1) << (uint32_t)exponent) - UINT32_C(1);
+    const uint32_t quotient = (magnitude >> (uint32_t)exponent)
+        + (uint32_t)((magnitude & mask) > (mask >> 1));
+    return value < 0 ? -(int32_t)quotient : (int32_t)quotient;
 }}
 
 int32_t {requantize}(int32_t value, int32_t multiplier, int32_t shift) {{

@@ -233,9 +233,9 @@ the model changes, this provides concrete advantages:
 - **Model-specialized optimization.** Shapes, padding, channels, multipliers,
   buffer addresses and execution order are compile-time constants, enabling
   fusion, liveness-based buffer reuse, packed weights and narrow 1x1, 3x3,
-  depthwise and Linear kernels. Budgeted partial/full unrolling and generic
-  Conv interior/border loop splitting are documented roadmap items, not
-  current performance claims.
+  depthwise and Linear kernels. The portable Conv2D and DepthwiseConv2D kernels
+  visit only the kernel taps that lie inside the input. Budgeted partial/full
+  unrolling is a documented roadmap item, not a current performance claim.
 - **Compile-time resource enforcement.** Constant bytes, activation arena,
   scratch and alignment are known before flashing; Flash/SRAM budgets can fail
   compilation and CI instead of being discovered on the board. Product gates

@@ -13,6 +13,18 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
   records them in `backend.requantization_placement` and the memory report;
   default artifacts are byte-for-byte unchanged;
 
+### Changed
+
+- the portable Conv2D and DepthwiseConv2D kernels clip each kernel window to
+  the input instead of testing every tap, and run their multiply-accumulate
+  through small dot-product functions. A padded tap reads the input zero point
+  and contributes exactly zero, so output bytes are unchanged;
+- the Q31 rounding divide uses 32-bit instead of 64-bit arithmetic. It matches
+  the previous implementation for every int32 value and exponent 0 to 31;
+- kernel IDs and `bakenn.int8.v1` are unchanged, but the generated C for these
+  kernels differs, so regenerated artifacts hash differently from earlier
+  builds;
+
 ### Fixed
 
 - preserve unique TFLite tensor/constant identities and float32 RELU6 rounding;
