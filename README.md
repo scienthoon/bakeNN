@@ -679,7 +679,7 @@ offline, using only the frozen MNIST checkpoint and images in this repository.
 They print one `PASS`/`FAIL` line per check:
 
 ```bash
-python scripts/functional_test.py
+python scripts/functional_checks.py
 ```
 
 CI runs the dependency-light suite on Python 3.10, 3.11, 3.12, and 3.13 with

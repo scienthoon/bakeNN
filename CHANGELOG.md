@@ -73,7 +73,7 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 
 ### Validation
 
-- `scripts/functional_test.py` runs 13 offline functional checks against the
+- `scripts/functional_checks.py` runs 13 offline functional checks against the
   frozen MNIST checkpoint (compile, byte-exact host run, accuracy and memory
   reports, budget and unsupported-operator rejection, Cortex-M4/CMSIS-NN
   cross-link, ESP-IDF and Arduino exports, manifest integrity, determinism,

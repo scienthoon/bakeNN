@@ -703,7 +703,7 @@ PYTHONPATH=src python -m pytest -q
 `PASS`/`FAIL` 한 줄을 출력합니다.
 
 ```bash
-python scripts/functional_test.py
+python scripts/functional_checks.py
 ```
 
 CI는 Python 3.10, 3.11, 3.12, 3.13과 GCC 및 Clang 조합으로 의존성이

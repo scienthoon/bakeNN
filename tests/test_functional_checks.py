@@ -13,7 +13,7 @@ def test_functional_checks_pass_offline(tmp_path: Path) -> None:
     pytest.importorskip("torch")
     repository = Path(__file__).resolve().parents[1]
     completed = subprocess.run(
-        [sys.executable, str(repository / "scripts/functional_test.py"), "--output", str(tmp_path / "run")],
+        [sys.executable, str(repository / "scripts/functional_checks.py"), "--output", str(tmp_path / "run")],
         capture_output=True,
         text=True,
     )

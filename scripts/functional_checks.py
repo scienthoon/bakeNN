@@ -5,10 +5,10 @@ Every check uses only files in this repository: the frozen MNIST checkpoint,
 calibration images and test images under ``examples/mnist/evidence``. Nothing
 is downloaded and nothing is trained.
 
-    python scripts/functional_test.py            # all checks
-    python scripts/functional_test.py F03 F06    # selected checks
-    python scripts/functional_test.py --list     # ids and titles
-    python scripts/functional_test.py --strict   # a missing tool is a failure
+    python scripts/functional_checks.py            # all checks
+    python scripts/functional_checks.py F03 F06    # selected checks
+    python scripts/functional_checks.py --list     # ids and titles
+    python scripts/functional_checks.py --strict   # a missing tool is a failure
 
 A check passes only when its stated condition holds; ``SKIP`` means an
 optional host tool (a cross compiler, a C++ compiler) is not installed.
@@ -407,7 +407,7 @@ def main() -> int:
     parser.add_argument(
         "--output",
         type=Path,
-        default=REPOSITORY / "build/functional_test",
+        default=REPOSITORY / "build/functional_checks",
         help="scratch directory; an earlier one from this script is replaced",
     )
     arguments = parser.parse_args()
@@ -423,12 +423,12 @@ def main() -> int:
 
     # Only a directory this script created is ever deleted.
     output = arguments.output.resolve()
-    marker = output / ".bakenn_functional_test"
+    marker = output / ".bakenn_functional_checks"
     if output.exists() and any(output.iterdir()) and not marker.is_file():
-        parser.error(f"--output is not an earlier functional-test directory: {output}")
+        parser.error(f"--output is not an earlier functional-checks directory: {output}")
     shutil.rmtree(output, ignore_errors=True)
     output.mkdir(parents=True)
-    marker.write_text("scratch directory of scripts/functional_test.py\n")
+    marker.write_text("scratch directory of scripts/functional_checks.py\n")
     session = Session(output, arguments.cc)
 
     counts = {"PASS": 0, "FAIL": 0, "SKIP": 0}
