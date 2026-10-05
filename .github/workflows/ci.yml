@@ -37,6 +37,12 @@ jobs:
           - python: "3.13"
             torch: "2.10.*"
             torchvision: "0.25.*"
+          - python: "3.12"
+            torch: "2.12.*"
+            torchvision: "0.27.*"
+          - python: "3.13"
+            torch: "2.14.*"
+            torchvision: "0.29.*"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -75,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: torch-frontend-matrix
     steps:
-      - run: echo "Torch frontend and installed-wheel checks passed at both supported endpoints."
+      - run: echo "Torch frontend and installed-wheel checks passed across the supported range."
 
   tflite-frontend:
     runs-on: ubuntu-latest
@@ -146,3 +152,37 @@ jobs:
           idf.py set-target "${{ matrix.target }}"
           idf.py build
           idf.py size-components
+
+  arduino-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - core: arduino:samd
+            fqbn: arduino:samd:nano_33_iot
+          - core: arduino:renesas_uno
+            fqbn: arduino:renesas_uno:minima
+          - core: arduino:mbed_nano
+            fqbn: arduino:mbed_nano:nano33ble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: arduino/setup-arduino-cli@v2.0.0
+      - run: python -m pip install .
+      - run: >-
+          python examples/targets/generate_smoke.py
+          --target portable32
+          --output /tmp/bakenn-arduino
+          --arduino
+      - run: arduino-cli core update-index
+      - run: arduino-cli core install ${{ matrix.core }}
+      - name: Build Arduino example
+        run: >-
+          arduino-cli compile
+          --fqbn ${{ matrix.fqbn }}
+          --warnings all
+          --library /tmp/bakenn-arduino/arduino
+          /tmp/bakenn-arduino/arduino/examples/Infer

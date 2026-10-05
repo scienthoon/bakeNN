@@ -248,8 +248,9 @@ MCU와 모델이 고정되고 모델이 바뀔 때 펌웨어를 다시 빌드하
 - **모델 특화 최적화.** 형상, 패딩, 채널, 승수, 버퍼 주소, 실행 순서가
   컴파일 시점 상수이므로 융합, 수명 기반 버퍼 재사용, 패킹된 가중치,
   좁은 범위의 1x1, 3x3, depthwise, Linear 커널을 사용할 수 있습니다.
-  예산이 지정된 부분/전체 언롤링과 일반 Conv 내부/경계 루프 분리는
-  문서화된 로드맵 항목이며, 현재의 성능 주장이 아닙니다.
+  portable Conv2D와 DepthwiseConv2D 커널은 입력 안에 있는 커널 탭만
+  방문합니다. 예산이 지정된 부분/전체 언롤링은 문서화된 로드맵 항목이며,
+  현재의 성능 주장이 아닙니다.
 - **컴파일 시점 리소스 강제.** 플래시하기 전에 상수 바이트, 활성화
   아레나, 스크래치, 정렬 요구량을 알 수 있습니다. Flash/SRAM 예산은
   보드에서 발견하는 대신 컴파일과 CI를 실패시킬 수 있습니다. 따라서
@@ -606,6 +607,24 @@ nRF52840DK/Cortex-M4 벤치마크를 다룹니다. 원본 ESP32 MobileNetV2
 측정되지 않았습니다.
 [타깃 계층 계약](docs/TARGETS.md)을 참조하십시오.
 
+보드에 의존하지 않는 모델은 Arduino 라이브러리로도 내보낼 수 있습니다.
+
+```python
+compiled = bakenn.compile(graph, "build/model")
+library = bakenn.export_arduino_library(
+    compiled.artifacts, "Arduino/libraries/my_model"
+)
+```
+
+라이브러리의 `src/`에는 생성된 C가 들어가고, 모델을 호출해 실행 시간과
+출력 코드를 인쇄하는 `Infer` 예제 스케치가 함께 들어갑니다. 32비트
+Arduino 코어라면 어디서든 빌드됩니다. CI는 Nano 33 IoT(Cortex-M0+),
+UNO R4 Minima, Nano 33 BLE(Cortex-M4)용으로 컴파일합니다. 이는 보드 없는
+빌드이며 실보드 측정이 아닙니다. CMSIS-NN이나 ESP-NN을 포함한 산출물,
+타깃 전용 커널을 선택한 산출물, `requantization_in_dram`을 쓴 산출물은
+거부합니다. Arduino 라이브러리는 이들에 필요한 include 경로와 컴파일
+정의를 추가할 수 없기 때문입니다. 8비트 AVR 보드는 지원 범위가 아닙니다.
+
 `STATIC_PRIORITY`는 기능 조건자와 선언된 우선순위에 따라 선택합니다.
 더 낮은 지연 시간, Flash 또는 에너지를 보장하지 않습니다. `MEASURED`는
 정규 워크로드, 타깃, 툴체인, 플래그가 정확히 일치하는 물리 비용 항목만
@@ -681,10 +700,11 @@ PYTHONPATH=src python -m pytest -q
 
 CI는 Python 3.10, 3.11, 3.12, 3.13과 GCC 및 Clang 조합으로 의존성이
 적은 테스트 스위트를 실행합니다. 프레임워크 행렬은 추가로 Python
-3.10에서 Torch 2.9/torchvision 0.24, Python 3.13에서 Torch
-2.10/torchvision 0.25를 실행하며, wheel 빌드와 깨끗한 설치 검사도
-포함합니다. 이 조합은 v1에서 지원하는 프레임워크 양 끝점입니다. 이전
-Torch export IR 방언은 근사 해석하지 않고 거부합니다.
+3.10에서 Torch 2.9/torchvision 0.24, Python 3.12에서 Torch
+2.12/torchvision 0.27, Python 3.13에서 Torch 2.10/torchvision 0.25와
+Torch 2.14/torchvision 0.29를 실행하며, wheel 빌드와 깨끗한 설치 검사도
+포함합니다. 지원 범위는 Torch 2.9부터 2.14까지입니다. 이전 Torch export
+IR 방언은 근사 해석하지 않고 거부합니다.
 
 생성된 모델은 호출자 소유의 원시 아레나 포인터를 노출합니다. 보고된
 `*_ARENA_SIZE` 바이트를 `*_ARENA_ALIGNMENT`에 맞춰 정확히
