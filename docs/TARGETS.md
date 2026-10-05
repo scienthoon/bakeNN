@@ -34,10 +34,11 @@ It may not change tensor qparams, rounding, operator order, or liveness.
 ESP-NN is optional and selected only when explicitly enabled with a non-portable
 kernel policy and all capability predicates hold. Original ESP32 currently uses
 optimized ESP-NN Conv/Depthwise paths while unsupported FC/pool cases fall back
-to portable C. ESP32-S3 can select its pinned Conv, Depthwise, per-channel FC
-and pooling source closures; ESP32-C3 intentionally remains portable because
-the pinned ESP-NN revision has no matching optimized C3 contract. Every fallback
-preserves the same verified INT8 semantics and is recorded in the manifest.
+to portable C. ESP32-S3 can select its pinned Conv, Depthwise, per-channel FC,
+pooling and same-shape Add source closures; ESP32-C3 intentionally remains
+portable because the pinned ESP-NN revision has no matching optimized C3
+contract. Every fallback preserves the same verified INT8 semantics and is
+recorded in the manifest.
 
 ESP-IDF targets also accept the `requantization_in_dram` backend opt-in. It
 prefixes each per-channel multiplier/shift array definition with ESP-IDF's

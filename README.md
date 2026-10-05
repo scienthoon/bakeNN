@@ -247,9 +247,9 @@ the model changes, this provides concrete advantages:
   ESP-NN directly without retaining TFLM around that kernel. The current
   CMSIS-NN adapters cover FullyConnected, Conv2D, DepthwiseConv2D,
   AveragePool2D and MaxPool2D on ARMv7E-M DSP targets. The opt-in ESP-NN
-  backend covers SIMD Conv2D, DepthwiseConv2D, per-channel FullyConnected and
-  pooling on ESP32-S3, plus Espressif's optimized Conv2D/DepthwiseConv2D path
-  on the original ESP32.
+  backend covers SIMD Conv2D, DepthwiseConv2D, per-channel FullyConnected,
+  pooling and same-shape Add on ESP32-S3, plus Espressif's optimized
+  Conv2D/DepthwiseConv2D path on the original ESP32.
 - **Inspectable deployment artifacts.** The generated C function order,
   weights, static offsets, kernel IDs, qparams and manifest can be audited
   directly. Firmware review does not need to reconstruct the model across a
@@ -514,12 +514,15 @@ the generated ESP-IDF component. It does not use TFLM or require an ESP
 component download while building the generated project.
 
 - `esp32s3` selects ESP-NN Conv2D, DepthwiseConv2D, per-channel
-  FullyConnected, AveragePool2D and MaxPool2D when their exact capability
+  FullyConnected, AveragePool2D, MaxPool2D and Add when their exact capability
   predicates hold. Required ESP-NN scratch and safe FC staging are included in
-  BakeNN's single statically planned scratch arena.
+  BakeNN's single statically planned scratch arena. Add is lowered only for
+  same-shape, 16-byte-aligned arena operands with right-shift-only
+  requantization; broadcast Adds and Adds that read or write caller-owned model
+  I/O stay portable.
 - `esp32` selects Espressif's optimized generic Conv2D and
-  DepthwiseConv2D implementations. ESP-NN maps FC and pooling to ANSI C on this
-  chip, so BakeNN deliberately keeps its own verified generic kernels for
+  DepthwiseConv2D implementations. ESP-NN maps FC, pooling and Add to ANSI C on
+  this chip, so BakeNN deliberately keeps its own verified generic kernels for
   those operators.
 - `esp32c3` has no ESP-NN implementation in the pinned release and therefore
   retains BakeNN's portable/generic optimized fallback.

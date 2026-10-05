@@ -10,17 +10,23 @@ import numpy as np
 import pytest
 
 import bakenn
+from bakenn.backend.esp_nn.integration import add_capability
 from bakenn.errors import CompileError
 from bakenn.ir import (
+    AddOp,
     AveragePool2DOp,
+    ClampOp,
     DType,
     Layout,
     MaxPool2DOp,
     PerTensorQParams,
     QuantizedGraph,
+    RequantizeOp,
     TensorType,
 )
 from bakenn.ir.ops.pool import AVERAGE_POOL_PROFILE_TFLITE_RAW_V1
+from bakenn.plan.steps import AddStep
+from bakenn.quantization.fixedpoint import INT32_MAX
 from bakenn.targets import ESP32, ESP32_S3, export_esp_idf_project
 from tests.p0.model_fixtures import residual_ds_cnn_graph
 from tests.p2.test_backend_selection import linear_graph
@@ -71,6 +77,58 @@ def _pool_graph(
         ),
         inputs=("input",),
         outputs=("output",),
+    )
+
+
+def _add_graph(*, broadcast: bool = False, add_writes_output: bool = False) -> QuantizedGraph:
+    """Same-shape Add between two arena tensors with distinct qparams.
+
+    105 elements exercise both the 8-wide vector loop and the scalar tail of
+    the S3 assembly.
+    """
+
+    shape = (1, 3, 5, 7)
+    right_shape = (1, 1, 1, 7) if broadcast else shape
+    input_q = PerTensorQParams(0.25, -7)
+    sum_name = "output" if add_writes_output else "sum"
+    values = {
+        "input": TensorType(shape, DType.INT8, Layout.NHWC, input_q),
+        "left": TensorType(shape, DType.INT8, Layout.NHWC, PerTensorQParams(0.5, 11)),
+        "right": TensorType(right_shape, DType.INT8, Layout.NHWC, input_q),
+        sum_name: TensorType(shape, DType.INT8, Layout.NHWC, PerTensorQParams(0.375, -3)),
+    }
+    right = (
+        AveragePool2DOp("right", "input", "right", kernel=(3, 5), stride=(1, 1))
+        if broadcast
+        else ClampOp("right", "input", "right", activation_min=-100, activation_max=90)
+    )
+    ops: tuple[object, ...] = (
+        RequantizeOp("left", "input", "left"),
+        right,
+        AddOp("add", "left", "right", sum_name, activation_min=-118, activation_max=121),
+    )
+    if not add_writes_output:
+        values["output"] = TensorType(shape, DType.INT8, Layout.NHWC, PerTensorQParams(0.3, 5))
+        ops = (*ops, RequantizeOp("final", "sum", "output"))
+    return QuantizedGraph(
+        name=(
+            "esp_nn_add"
+            + ("_broadcast" if broadcast else "")
+            + ("_to_output" if add_writes_output else "")
+        ),
+        values=values,
+        constants={},
+        ops=ops,
+        inputs=("input",),
+        outputs=("output",),
+    )
+
+
+def _add_selection(compiled):  # type: ignore[no-untyped-def]
+    return next(
+        item
+        for item in compiled.artifacts.backend_plan.selections
+        if item.step_name == "add"
     )
 
 
@@ -172,7 +230,7 @@ def _compile_host(
             check=True,
             capture_output=True,
         )
-    command = [
+    sanitized = [
         compiler,
         "-std=c11",
         "-O2",
@@ -182,10 +240,28 @@ def _compile_host(
         "-Wno-unused-parameter",
         "-fsanitize=address,undefined",
         "-fno-sanitize-recover=all",
+    ]
+    support_objects = []
+    for source in support_sources:
+        support_object = output_dir / f"support_{source.stem}.o"
+        # ESP-NN's ANSI Add left-shifts negative int32 values, which ISO C
+        # leaves undefined and GCC defines as two's complement. On ESP32-S3
+        # the assembly runs instead, so only this vendor oracle drops the check.
+        relaxed = (
+            ["-fno-sanitize=shift-base"] if source.name == "esp_nn_add_ansi.c" else []
+        )
+        subprocess.run(
+            [*sanitized, *relaxed, *include_flags, "-c", str(source), "-o", str(support_object)],
+            check=True,
+            capture_output=True,
+        )
+        support_objects.append(support_object)
+    command = [
+        *sanitized,
         str(compiled.artifacts.model_source),
         str(compiled.artifacts.weights_source),
         str(compiled.artifacts.kernels_source),
-        *(str(source) for source in support_sources),
+        *(str(source) for source in support_objects),
         str(runner),
         *include_flags,
         "-o",
@@ -320,6 +396,7 @@ def test_esp32_generic_optimized_conv_and_depthwise_are_byte_exact(
         (linear_graph(32, 16), "esp_nn.esp32s3.linear_per_channel_s8.v1.2.6"),
         (_pool_graph(AveragePool2DOp), "esp_nn.esp32s3.average_pool2d_s8.v1.2.6"),
         (_pool_graph(MaxPool2DOp), "esp_nn.esp32s3.max_pool2d_s8.v1.2.6"),
+        (_add_graph(), "esp_nn.esp32s3.add_s8.v1.2.6"),
     ],
 )
 def test_esp32s3_wrappers_match_reference_through_official_ansi_oracle(
@@ -397,6 +474,54 @@ def test_esp_nn_fallbacks_are_explicit_and_require_optimized_fails_closed(
         for item in no_esp.artifacts.backend_plan.selections
     )
     assert not no_esp.artifacts.support_sources
+
+
+def test_esp32s3_add_bundles_assembly_and_falls_back_explicitly(
+    tmp_path: Path,
+) -> None:
+    compiled = bakenn.compile(
+        _add_graph(),
+        tmp_path / "add",
+        backend_options=_options(ESP32_S3),
+        target=ESP32_S3,
+    )
+    assert _add_selection(compiled).kernel_id == "esp_nn.esp32s3.add_s8.v1.2.6"
+    source_names = {source.name for source in compiled.artifacts.support_sources}
+    assert {"esp_nn_add_ansi.c", "esp_nn_add_s8_esp32s3.S"} <= source_names
+    project = export_esp_idf_project(compiled.artifacts, ESP32_S3, tmp_path / "esp_idf")
+    component_cmake = (project.component / "CMakeLists.txt").read_text(encoding="utf-8")
+    assert "esp_nn_add_s8_esp32s3.S" in component_cmake
+
+    fallbacks = (
+        (_add_graph(broadcast=True), ESP32_S3, "same-shape inputs"),
+        (_add_graph(add_writes_output=True), ESP32_S3, "caller-owned model input or output"),
+        (_add_graph(), ESP32, "ANSI C"),
+    )
+    for graph, target, reason in fallbacks:
+        fallback = bakenn.compile(
+            graph,
+            tmp_path / f"{graph.name}_{target.target_id}",
+            backend_options=_options(target),
+            target=target,
+        )
+        selection = _add_selection(fallback)
+        assert selection.kernel_id == "portable.add_s8.v1"
+        rejected_id = f"esp_nn.{target.target_id}.add_s8.v1.2.6"
+        assert reason in selection.rejected[rejected_id]
+
+    step = next(item for item in compiled.plan.steps if isinstance(item, AddStep))
+    options = _options(ESP32_S3)
+    assert add_capability(step, compiled.plan, options).supported
+    left_shift = add_capability(replace(step, output_shift=1), compiled.plan, options)
+    assert not left_shift.supported
+    assert "only right shifts" in left_shift.reason
+    rounding = add_capability(
+        replace(step, input_a_shift=-30, input_a_pre_high_mul_bound=INT32_MAX),
+        compiled.plan,
+        options,
+    )
+    assert not rounding.supported
+    assert "rounding addend" in rounding.reason
 
 
 def test_esp_nn_bundle_and_esp_idf_project_are_pinned_and_self_contained(

@@ -262,8 +262,8 @@ MCU와 모델이 고정되고 모델이 바뀔 때 펌웨어를 다시 빌드하
   CMSIS-NN 어댑터는 ARMv7E-M DSP 타깃에서 FullyConnected, Conv2D,
   DepthwiseConv2D, AveragePool2D, MaxPool2D를 지원합니다. 선택 사용
   방식의 ESP-NN 백엔드는 ESP32-S3의 SIMD Conv2D, DepthwiseConv2D,
-  채널별 FullyConnected, 풀링과 원본 ESP32의 Espressif 최적화
-  Conv2D/DepthwiseConv2D 경로를 지원합니다.
+  채널별 FullyConnected, 풀링, 같은 모양의 Add와 원본 ESP32의 Espressif
+  최적화 Conv2D/DepthwiseConv2D 경로를 지원합니다.
 - **검사 가능한 배포 산출물.** 생성된 C 함수 순서, 가중치, 정적
   오프셋, 커널 ID, qparams, 매니페스트를 직접 감사할 수 있습니다.
   펌웨어 검토 시 FlatBuffer, 인터프리터, op 리졸버, 텐서 플래너,
@@ -534,10 +534,14 @@ padding을 다룹니다. AveragePool은 영점과 유효 윈도 개수로 CMSIS
 
 - `esp32s3`는 정확한 기능 조건자를 만족할 때 ESP-NN Conv2D,
   DepthwiseConv2D, 출력 채널별 FullyConnected, AveragePool2D,
-  MaxPool2D를 선택합니다. 필요한 ESP-NN 스크래치와 안전한 FC 스테이징은
-  BakeNN이 정적으로 계획한 하나의 스크래치 아레나에 포함됩니다.
+  MaxPool2D, Add를 선택합니다. 필요한 ESP-NN 스크래치와 안전한 FC 스테이징은
+  BakeNN이 정적으로 계획한 하나의 스크래치 아레나에 포함됩니다. Add는
+  두 입력과 출력의 모양이 같고, 16바이트 정렬된 아레나 버퍼이며,
+  재양자화가 오른쪽 시프트만 쓰는 경우에만 ESP-NN으로 내립니다.
+  브로드캐스트 Add와 호출자가 소유한 모델 입출력을 읽거나 쓰는 Add는
+  portable로 남습니다.
 - `esp32`는 Espressif의 최적화된 일반 Conv2D 및 DepthwiseConv2D
-  구현을 선택합니다. 이 칩에서 ESP-NN은 FC와 풀링을 ANSI C로
+  구현을 선택합니다. 이 칩에서 ESP-NN은 FC, 풀링, Add를 ANSI C로
   매핑하므로 BakeNN은 이 연산에 대해 자체 검증된 일반 커널을 의도적으로
   유지합니다.
 - `esp32c3`에는 고정된 릴리스의 ESP-NN 구현이 없으므로 BakeNN의

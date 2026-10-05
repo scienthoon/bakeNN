@@ -15,8 +15,9 @@ from bakenn.backend.portable_c.selection import (
 from bakenn.ir import PerTensorQParams
 from bakenn.ir.ops.pool import AVERAGE_POOL_PROFILE_TFLITE_RAW_V1
 from bakenn.ir.types import TARGET_SIZE_MAX
-from bakenn.plan import ExecutionPlan, LinearStep
+from bakenn.plan import ExecutionPlan, LinearStep, Storage
 from bakenn.plan.steps import (
+    AddStep,
     AveragePool2DStep,
     Conv2DStep,
     DepthwiseConv2DStep,
@@ -44,6 +45,10 @@ ESP_NN_AVERAGE_POOL_IDS = {
 }
 ESP_NN_MAX_POOL_IDS = {
     target: f"esp_nn.{target}.max_pool2d_s8.v{ESP_NN_VERSION}"
+    for target in ("esp32", "esp32s3")
+}
+ESP_NN_ADD_IDS = {
+    target: f"esp_nn.{target}.add_s8.v{ESP_NN_VERSION}"
     for target in ("esp32", "esp32s3")
 }
 
@@ -558,6 +563,94 @@ def pool_capability(
     )
 
 
+def _arena_offset(plan: ExecutionPlan, name: str) -> int | None:
+    """Return a tensor's arena offset after whole-buffer view aliases."""
+
+    tensor = plan.tensors[name]
+    seen = {name}
+    while tensor.storage is Storage.ALIAS:
+        assert tensor.alias_of is not None
+        if tensor.alias_of in seen:
+            return None
+        seen.add(tensor.alias_of)
+        tensor = plan.tensors[tensor.alias_of]
+    return tensor.offset if tensor.storage is Storage.ARENA else None
+
+
+def _add_rounding_fits(step: AddStep) -> bool:
+    """Check the S3 assembly's ``(x + (1 << (e - 1)) - (x < 0)) >> e`` rounding.
+
+    It equals BakeNN's rounding divide only while the addend cannot overflow
+    int32. A Q31 high multiply never increases magnitude, so each stage's
+    pre-high-multiply bound also bounds ``x``.
+    """
+
+    for bound, shift in (
+        (step.input_a_pre_high_mul_bound, step.input_a_shift),
+        (step.input_b_pre_high_mul_bound, step.input_b_shift),
+        (step.output_pre_high_mul_bound, step.output_shift),
+    ):
+        if shift < 0 and bound + (1 << (-shift - 1)) > _I32_MAX:
+            return False
+    return True
+
+
+def add_capability(
+    step: AddStep,
+    plan: ExecutionPlan,
+    options: CBackendOptions,
+) -> KernelCapability:
+    target = _target_id(options)
+    kernel_id = ESP_NN_ADD_IDS.get(target, ESP_NN_ADD_IDS["esp32s3"])
+    failure = _base_failure(options)
+    input_a_type = plan.tensors[step.input_a].tensor_type
+    input_b_type = plan.tensors[step.input_b].tensor_type
+    output_type = plan.tensors[step.output].tensor_type
+    output_qparams = output_type.qparams
+    assert isinstance(output_qparams, PerTensorQParams)
+    offsets = tuple(
+        _arena_offset(plan, name) for name in (step.input_a, step.input_b, step.output)
+    )
+    if failure is None and target != "esp32s3":
+        failure = "ESP-NN maps ESP32 Add to ANSI C; BakeNN keeps its own kernel"
+    elif failure is None and not (
+        input_a_type.shape == input_b_type.shape == output_type.shape
+    ):
+        failure = "ESP-NN Add requires same-shape inputs without broadcasting"
+    elif failure is None and output_type.numel > _I32_MAX:
+        failure = "ESP-NN Add element count must fit int32"
+    elif failure is None and any(offset is None or offset % 16 for offset in offsets):
+        # The assembly checks only the input pointers before storing 8-byte
+        # vectors, so caller-owned model I/O of unknown alignment is excluded.
+        failure = (
+            "ESP32-S3 Add assembly requires 16-byte-aligned arena operands, "
+            "not caller-owned model input or output"
+        )
+    elif failure is None and any(
+        not -30 <= shift <= 0
+        for shift in (step.input_a_shift, step.input_b_shift, step.output_shift)
+    ):
+        failure = "ESP-NN Add applies only right shifts; shifts must be in [-30, 0]"
+    elif failure is None and not _add_rounding_fits(step):
+        failure = "ESP32-S3 Add rounding addend can overflow int32 for these bounds"
+    if failure is None:
+        failure = requantization_failure(
+            (step.sum_bound,),
+            (step.output_multiplier,),
+            (step.output_shift,),
+            output_qparams.zero_point,
+        )
+    if failure is not None:
+        return _unsupported(kernel_id, failure)
+    return KernelCapability(
+        kernel_id=kernel_id,
+        priority=500,
+        optimized=True,
+        supported=True,
+        reason="pinned ESP-NN v1.2.6 selects ESP32-S3 SIMD elementwise Add",
+    )
+
+
 def _scratch_expression(context: StepEmitContext) -> str:
     assert context.selection is not None
     return context.scratch_pointer if context.selection.scratch_size else "NULL"
@@ -785,12 +878,55 @@ def pool_emission(
     return kernel, call
 
 
+def add_emission(step: AddStep, context: StepEmitContext) -> tuple[KernelEmission, str]:
+    input_a_qparams = context.plan.tensors[step.input_a].tensor_type.qparams
+    input_b_qparams = context.plan.tensors[step.input_b].tensor_type.qparams
+    output_type = context.plan.tensors[step.output].tensor_type
+    output_qparams = output_type.qparams
+    assert isinstance(input_a_qparams, PerTensorQParams)
+    assert isinstance(input_b_qparams, PerTensorQParams)
+    assert isinstance(output_qparams, PerTensorQParams)
+    function = f"{context.symbol}_add_esp_nn_s8"
+    signature = f"""void {function}(
+    const int8_t *input_a, const int8_t *input_b, int8_t *output,
+    int32_t input_a_zero_point, int32_t input_b_zero_point, int32_t output_zero_point,
+    int32_t input_a_multiplier, int32_t input_a_shift,
+    int32_t input_b_multiplier, int32_t input_b_shift,
+    int32_t output_multiplier, int32_t output_shift,
+    int32_t activation_min, int32_t activation_max, int32_t size)"""
+    kernel = KernelEmission(
+        key="esp_nn_add_s8_v1_2_6",
+        header_includes=("<stdint.h>", '"esp_nn.h"'),
+        declaration=signature + ";",
+        definition=f"""{signature} {{
+    esp_nn_add_elementwise_s8(
+        input_a, input_b, -input_a_zero_point, -input_b_zero_point,
+        input_a_multiplier, input_b_multiplier, input_a_shift, input_b_shift,
+        {AddStep.left_shift}, output, output_zero_point, output_multiplier, output_shift,
+        activation_min, activation_max, size);
+}}""",
+    )
+    call = f"""    {function}(
+        {context.pointer(step.input_a, mutable=False)},
+        {context.pointer(step.input_b, mutable=False)},
+        {context.pointer(step.output, mutable=True)},
+        {input_a_qparams.zero_point}, {input_b_qparams.zero_point}, {output_qparams.zero_point},
+        {step.input_a_multiplier}, {step.input_a_shift},
+        {step.input_b_multiplier}, {step.input_b_shift},
+        {step.output_multiplier}, {step.output_shift},
+        {step.activation_min}, {step.activation_max}, {output_type.numel});"""
+    return kernel, call
+
+
 __all__ = [
+    "ESP_NN_ADD_IDS",
     "ESP_NN_AVERAGE_POOL_IDS",
     "ESP_NN_CONV_IDS",
     "ESP_NN_DEPTHWISE_IDS",
     "ESP_NN_LINEAR_IDS",
     "ESP_NN_MAX_POOL_IDS",
+    "add_capability",
+    "add_emission",
     "conv_capability",
     "conv_emission",
     "depthwise_capability",

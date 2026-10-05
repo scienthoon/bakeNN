@@ -23,6 +23,7 @@ _BASE_SOURCES_BY_FAMILY = {
     "linear": ("src/fully_connected/esp_nn_fully_connected_ansi.c",),
     "average_pool": ("src/pooling/esp_nn_avg_pool_ansi.c",),
     "max_pool": ("src/pooling/esp_nn_max_pool_ansi.c",),
+    "add": ("src/basic_math/esp_nn_add_ansi.c",),
 }
 
 _ESP32S3_COMMON_SOURCES = (
@@ -65,6 +66,7 @@ _ESP32S3_SOURCES_BY_FAMILY = {
         "src/pooling/esp_nn_avg_pool_s8_esp32s3.S",
     ),
     "max_pool": ("src/pooling/esp_nn_max_pool_s8_esp32s3.S",),
+    "add": ("src/basic_math/esp_nn_add_s8_esp32s3.S",),
 }
 
 _SUPPORTED_PREFIXES = (
@@ -84,6 +86,8 @@ def _kernel_family(kernel_id: str) -> str:
         return "average_pool"
     if ".max_pool2d_" in kernel_id:
         return "max_pool"
+    if ".add_s8." in kernel_id:
+        return "add"
     raise CompileError(f"unknown ESP-NN kernel family: {kernel_id}")
 
 

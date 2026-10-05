@@ -1,10 +1,21 @@
 from __future__ import annotations
 
+from bakenn.backend.esp_nn.integration import (
+    ESP_NN_ADD_IDS,
+    add_capability as esp_nn_add_capability,
+    add_emission as esp_nn_add_emission,
+)
+from bakenn.errors import CompileError
 from bakenn.ir.types import PerTensorQParams
+from bakenn.plan import ExecutionPlan
 from bakenn.plan.steps.elementwise import AddStep, ClampStep, MulStep, RequantizeStep
 
 from ..contracts import KernelEmission, StepEmitContext, StepEmission, emit_step
 from ..fixedpoint import clamp_s8_name, q31_kernel, q31_requantize_name
+from ..selection import CBackendOptions, KernelCapability, kernel_capabilities
+
+
+_PORTABLE_ADD_ID = "portable.add_s8.v1"
 
 
 def _kernel(context: StepEmitContext) -> KernelEmission:
@@ -205,17 +216,36 @@ def _broadcast_arguments(
     )
 
 
+@kernel_capabilities.register
+def _add_capabilities(
+    step: AddStep,
+    plan: ExecutionPlan,
+    options: CBackendOptions,
+) -> tuple[KernelCapability, ...]:
+    portable = KernelCapability(
+        kernel_id=_PORTABLE_ADD_ID,
+        priority=0,
+        optimized=False,
+        supported=True,
+        reason="portable C baseline is defined for this lowered step",
+    )
+    return esp_nn_add_capability(step, plan, options), portable
+
+
 @emit_step.register
 def _emit_add(step: AddStep, context: StepEmitContext) -> StepEmission:
-    input_a_qparams = _qparams(context, step.input_a)
-    input_b_qparams = _qparams(context, step.input_b)
-    output_qparams = _qparams(context, step.output)
     output_shape, a_strides, b_strides = _broadcast_arguments(step, context)
-    kernel_fn = f"{context.symbol}_add_s8"
-    return StepEmission(
-        constants=(),
-        kernels=(q31_kernel(context), _kernel(context)),
-        call=(
+    implementation = _PORTABLE_ADD_ID if context.selection is None else context.selection.kernel_id
+    if implementation in ESP_NN_ADD_IDS.values():
+        kernel, call = esp_nn_add_emission(step, context)
+        kernels: tuple[KernelEmission, ...] = (kernel,)
+    elif implementation == _PORTABLE_ADD_ID:
+        input_a_qparams = _qparams(context, step.input_a)
+        input_b_qparams = _qparams(context, step.input_b)
+        output_qparams = _qparams(context, step.output)
+        kernel_fn = f"{context.symbol}_add_s8"
+        kernels = (q31_kernel(context), _kernel(context))
+        call = (
             f"    {kernel_fn}(\n"
             f"        {context.pointer(step.input_a, mutable=False)},\n"
             f"        {context.pointer(step.input_b, mutable=False)},\n"
@@ -229,7 +259,13 @@ def _emit_add(step: AddStep, context: StepEmitContext) -> StepEmission:
             f"{step.input_b_multiplier}, {step.input_b_shift},\n"
             f"        {step.output_multiplier}, {step.output_shift}, "
             f"{step.activation_min}, {step.activation_max});"
-        ),
+        )
+    else:
+        raise CompileError(f"unsupported Add implementation {implementation}")
+    return StepEmission(
+        constants=(),
+        kernels=kernels,
+        call=call,
         manifest={
             "name": step.name,
             "kind": step.kernel_kind,
