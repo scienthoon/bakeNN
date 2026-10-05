@@ -674,6 +674,14 @@ The end-to-end test generates C, compiles it with the host C compiler, runs it,
 and compares its outputs byte-for-byte with the independent Python integer
 reference.
 
+The scripted functional checks exercise the main user-visible features
+offline, using only the frozen MNIST checkpoint and images in this repository.
+They print one `PASS`/`FAIL` line per check:
+
+```bash
+python scripts/functional_test.py
+```
+
 CI runs the dependency-light suite on Python 3.10, 3.11, 3.12, and 3.13 with
 both GCC and Clang. The framework matrix additionally exercises Torch
 2.9/torchvision 0.24 on Python 3.10, Torch 2.12/torchvision 0.27 on Python
