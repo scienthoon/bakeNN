@@ -233,9 +233,9 @@ the model changes, this provides concrete advantages:
 - **Model-specialized optimization.** Shapes, padding, channels, multipliers,
   buffer addresses and execution order are compile-time constants, enabling
   fusion, liveness-based buffer reuse, packed weights and narrow 1x1, 3x3,
-  depthwise and Linear kernels. Budgeted partial/full unrolling and generic
-  Conv interior/border loop splitting are documented roadmap items, not
-  current performance claims.
+  depthwise and Linear kernels. The portable Conv2D and DepthwiseConv2D kernels
+  visit only the kernel taps that lie inside the input. Budgeted partial/full
+  unrolling is a documented roadmap item, not a current performance claim.
 - **Compile-time resource enforcement.** Constant bytes, activation arena,
   scratch and alignment are known before flashing; Flash/SRAM budgets can fail
   compilation and CI instead of being discovered on the board. Product gates
@@ -673,10 +673,11 @@ reference.
 
 CI runs the dependency-light suite on Python 3.10, 3.11, 3.12, and 3.13 with
 both GCC and Clang. The framework matrix additionally exercises Torch
-2.9/torchvision 0.24 on Python 3.10 and Torch 2.10/torchvision 0.25 on Python
-3.13, including wheel build and clean-install checks. Those are the supported
-v1 framework endpoints; older Torch export IR dialects are rejected rather
-than interpreted approximately.
+2.9/torchvision 0.24 on Python 3.10, Torch 2.12/torchvision 0.27 on Python
+3.12, and Torch 2.10/torchvision 0.25 and Torch 2.14/torchvision 0.29 on Python
+3.13, including wheel build and clean-install checks. Torch 2.9 through 2.14 is
+the supported range; older Torch export IR dialects are rejected rather than
+interpreted approximately.
 
 Generated models expose a raw caller-owned arena pointer. Allocate exactly the
 reported `*_ARENA_SIZE` bytes with `*_ARENA_ALIGNMENT`; pass `NULL` when the

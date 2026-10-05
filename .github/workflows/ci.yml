@@ -37,6 +37,12 @@ jobs:
           - python: "3.13"
             torch: "2.10.*"
             torchvision: "0.25.*"
+          - python: "3.12"
+            torch: "2.12.*"
+            torchvision: "0.27.*"
+          - python: "3.13"
+            torch: "2.14.*"
+            torchvision: "0.29.*"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -75,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: torch-frontend-matrix
     steps:
-      - run: echo "Torch frontend and installed-wheel checks passed at both supported endpoints."
+      - run: echo "Torch frontend and installed-wheel checks passed across the supported range."
 
   tflite-frontend:
     runs-on: ubuntu-latest

@@ -241,5 +241,7 @@ def test_conv_c_emits_asymmetric_padding_and_per_channel_parameters(tmp_path: Pa
     assert f"        {input_zp}," in source
     assert "_op0_multiplier" in weights
     assert "_op0_shift" in weights
-    assert "input_value = input_zero_point" in kernel
-    assert "kernel_y * (int64_t)dilation_height" in kernel
+    # Padding taps read the zero point, so the kernel centers each code and
+    # visits only the dilated taps inside the input.
+    assert "(int32_t)input[index] - input_zero_point" in kernel
+    assert "kernel_y * dilation_height" in kernel

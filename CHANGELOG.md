@@ -19,6 +19,18 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
   records them in `backend.requantization_placement` and the memory report;
   default artifacts are byte-for-byte unchanged;
 
+### Changed
+
+- the portable Conv2D and DepthwiseConv2D kernels clip each kernel window to
+  the input instead of testing every tap, and run their multiply-accumulate
+  through small dot-product functions. A padded tap reads the input zero point
+  and contributes exactly zero, so output bytes are unchanged;
+- the Q31 rounding divide uses 32-bit instead of 64-bit arithmetic. It matches
+  the previous implementation for every int32 value and exponent 0 to 31;
+- kernel IDs and `bakenn.int8.v1` are unchanged, but the generated C for these
+  kernels differs, so regenerated artifacts hash differently from earlier
+  builds;
+
 ### Fixed
 
 - preserve unique TFLite tensor/constant identities and float32 RELU6 rounding;
@@ -41,6 +53,14 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
   application files or modifying source artifact trees;
 - preserve measured optimization flags during freestanding builds and reject
   conflicting build overrides.
+
+### Dependencies
+
+- the `torch` and `model-zoo` extras accept PyTorch 2.9 through 2.14 and
+  torchvision 0.24 through 0.29 (previously 2.9 to 2.10 and 0.24 to 0.25). CI
+  adds Torch 2.12 and 2.14 jobs. Torch 2.14 exports later uses of an
+  eval-dropout alias as the mutated value, so that one in-place pattern is now
+  captured instead of refused; the capture reproduces the eager result;
 
 ### Validation
 

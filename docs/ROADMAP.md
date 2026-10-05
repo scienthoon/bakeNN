@@ -132,6 +132,13 @@ Motivation:
 
 ### OPT-02 — Clean up the generic portable Conv
 
+Status: implemented for the portable Conv2D and DepthwiseConv2D kernels. Each
+kernel axis is clipped to the taps inside the input once per output row or
+pixel, operands are addressed through row and pixel base pointers, and the
+multiply-accumulate runs in a small dot-product function. Coordinates stay
+`int64_t` where they can be negative. Host tests remain byte-exact; no physical
+measurement has been taken.
+
 Keep one fully general fallback, but remove avoidable work without changing its
 accepted semantics:
 
@@ -697,7 +704,7 @@ Release work:
   (**implemented**; generated C ABI v1 is emitted and validated);
 - test wheel build, clean install, PyTorch optional extra and cross-toolchain
   matrix in CI (**implemented**; Python 3.10--3.13 runs under GCC/Clang, with
-  Torch 2.9/torchvision 0.24 and Torch 2.10/torchvision 0.25 endpoint jobs);
+  Torch 2.9/0.24, 2.10/0.25, 2.12/0.27 and 2.14/0.29 torch/torchvision jobs);
 - publish complete generated examples and reproducible benchmark bundles;
 - add semantic-version rules for IR, arithmetic profile, kernel ID, packing
   layout, manifest and result schema (**implemented for the public v1

@@ -66,15 +66,55 @@ def _int32_constant(symbol: str, values: tuple[int, ...]) -> ConstantEmission:
     )
 
 
+def _clipped_taps(axis: str, output: str, stride: str, pad: str, indent: int) -> str:
+    """C that clips one kernel axis to the taps that lie inside the input.
+
+    A tap outside the input reads the input zero point, so its centered
+    contribution is exactly zero and skipping it leaves the accumulator
+    unchanged.
+    """
+
+    extent = "input_height" if axis == "y" else "input_width"
+    kernel = "kernel_height" if axis == "y" else "kernel_width"
+    dilation = "dilation_height" if axis == "y" else "dilation_width"
+    lines = (
+        f"const int64_t origin_{axis} =",
+        f"    (int64_t){output} * (int64_t){stride} - (int64_t){pad};",
+        f"size_t kernel_{axis}_begin = 0;",
+        f"size_t kernel_{axis}_end = 0;",
+        f"if (origin_{axis} < (int64_t){extent}) {{",
+        f"    if (origin_{axis} < 0) {{",
+        f"        kernel_{axis}_begin =",
+        f"            ((size_t)(-origin_{axis}) + {dilation} - 1u) / {dilation};",
+        "    }",
+        f"    const size_t last_{axis} =",
+        f"        (size_t)((int64_t){extent} - 1 - origin_{axis}) / {dilation};",
+        f"    kernel_{axis}_end = last_{axis} < {kernel} ? last_{axis} + 1u : {kernel};",
+        "}",
+    )
+    return "\n".join(" " * indent + line for line in lines)
+
+
 def _conv2d_kernel(context: StepEmitContext) -> KernelEmission:
     symbol = context.symbol
     kernel_fn = f"{symbol}_conv2d_s8"
+    dot_fn = f"{symbol}_conv2d_dot_s8"
     requantize = q31_requantize_name(context)
     clamp = clamp_s8_name(context)
+    # The dot product stays a separate small function: inside the 26-argument
+    # kernel a size-optimizing compiler spills its operands in the hot loop.
+    dot_signature = f"""int32_t {dot_fn}(
+    const int8_t *input,
+    const int8_t *weight,
+    size_t count,
+    int32_t input_zero_point,
+    int32_t accumulator)"""
     return KernelEmission(
         key="conv2d_s8_v1",
         header_includes=("<stddef.h>", "<stdint.h>"),
-        declaration=f"""void {kernel_fn}(
+        declaration=f"""{dot_signature};
+
+void {kernel_fn}(
     const int8_t *input,
     const int8_t *weight,
     const int32_t *bias,
@@ -100,7 +140,14 @@ def _conv2d_kernel(context: StepEmitContext) -> KernelEmission:
     int32_t output_zero_point,
     int32_t activation_min,
     int32_t activation_max);""",
-        definition=f"""void {kernel_fn}(
+        definition=f"""{dot_signature} {{
+    for (size_t index = 0; index < count; ++index) {{
+        accumulator += ((int32_t)input[index] - input_zero_point) * (int32_t)weight[index];
+    }}
+    return accumulator;
+}}
+
+void {kernel_fn}(
     const int8_t *input,
     const int8_t *weight,
     const int32_t *bias,
@@ -126,47 +173,53 @@ def _conv2d_kernel(context: StepEmitContext) -> KernelEmission:
     int32_t output_zero_point,
     int32_t activation_min,
     int32_t activation_max) {{
+    const size_t group_input_channels = input_channels / groups;
+    const size_t group_output_channels = output_channels / groups;
+    const size_t input_row_size = input_width * input_channels;
+    const size_t kernel_row_size = kernel_width * group_input_channels;
+    const size_t kernel_size = kernel_height * kernel_row_size;
+    const size_t pixel_step = dilation_width * input_channels;
+    /* Without groups or horizontal dilation, the valid taps of one kernel row
+       are contiguous in both the input and the weights. */
+    const int contiguous_row = groups == 1u && dilation_width == 1u;
     for (size_t output_y = 0; output_y < output_height; ++output_y) {{
+{_clipped_taps("y", "output_y", "stride_height", "pad_top", 8)}
         for (size_t output_x = 0; output_x < output_width; ++output_x) {{
-            const size_t group_input_channels = input_channels / groups;
-            const size_t group_output_channels = output_channels / groups;
+{_clipped_taps("x", "output_x", "stride_width", "pad_left", 12)}
+            const size_t valid_x =
+                kernel_x_begin < kernel_x_end ? kernel_x_end - kernel_x_begin : 0u;
+            const size_t first_x = valid_x
+                ? (size_t)(origin_x + (int64_t)(kernel_x_begin * dilation_width)) : 0u;
+            const size_t runs = contiguous_row ? (size_t)(valid_x != 0u) : valid_x;
+            const size_t run_size =
+                contiguous_row ? valid_x * group_input_channels : group_input_channels;
+            size_t input_channel_base = 0;
+            size_t group_position = 0;
             for (size_t output_channel = 0; output_channel < output_channels; ++output_channel) {{
-                const size_t group = output_channel / group_output_channels;
-                const size_t input_channel_base = group * group_input_channels;
+                const int8_t *kernel = weight + output_channel * kernel_size
+                    + kernel_x_begin * group_input_channels;
                 int32_t accumulator = bias[output_channel];
-                for (size_t kernel_y = 0; kernel_y < kernel_height; ++kernel_y) {{
-                    const int64_t input_y = (int64_t)output_y * (int64_t)stride_height
-                        + (int64_t)kernel_y * (int64_t)dilation_height - (int64_t)pad_top;
-                    for (size_t kernel_x = 0; kernel_x < kernel_width; ++kernel_x) {{
-                        const int64_t input_x = (int64_t)output_x * (int64_t)stride_width
-                            + (int64_t)kernel_x * (int64_t)dilation_width - (int64_t)pad_left;
-                        for (size_t local_input_channel = 0;
-                             local_input_channel < group_input_channels;
-                             ++local_input_channel) {{
-                            const size_t input_channel =
-                                input_channel_base + local_input_channel;
-                            int32_t input_value = input_zero_point;
-                            if (input_y >= 0 && input_x >= 0
-                                && (uint64_t)input_y < (uint64_t)input_height
-                                && (uint64_t)input_x < (uint64_t)input_width) {{
-                                const size_t input_index =
-                                    ((size_t)input_y * input_width + (size_t)input_x) * input_channels
-                                    + input_channel;
-                                input_value = input[input_index];
-                            }}
-                            const size_t weight_index =
-                                ((output_channel * kernel_height + kernel_y) * kernel_width + kernel_x)
-                                * group_input_channels + local_input_channel;
-                            accumulator += (input_value - input_zero_point) * (int32_t)weight[weight_index];
-                        }}
+                for (size_t kernel_y = kernel_y_begin; kernel_y < kernel_y_end; ++kernel_y) {{
+                    const size_t input_y =
+                        (size_t)(origin_y + (int64_t)(kernel_y * dilation_height));
+                    const int8_t *pixel = input + input_y * input_row_size
+                        + first_x * input_channels + input_channel_base;
+                    const int8_t *taps = kernel + kernel_y * kernel_row_size;
+                    for (size_t run = 0; run < runs; ++run) {{
+                        accumulator = {dot_fn}(
+                            pixel + run * pixel_step,
+                            taps + run * group_input_channels,
+                            run_size, input_zero_point, accumulator);
                     }}
                 }}
                 const int32_t scaled = {requantize}(
                     accumulator, multiplier[output_channel], shift[output_channel]);
-                const size_t output_index =
-                    (output_y * output_width + output_x) * output_channels + output_channel;
-                output[output_index] = {clamp}(
+                *output++ = {clamp}(
                     (int64_t)scaled + output_zero_point, activation_min, activation_max);
+                if (++group_position == group_output_channels) {{
+                    group_position = 0;
+                    input_channel_base += group_input_channels;
+                }}
             }}
         }}
     }}
@@ -400,12 +453,23 @@ def _cortex_m4_conv3x3_kernel(context: StepEmitContext) -> KernelEmission:
 def _depthwise_kernel(context: StepEmitContext) -> KernelEmission:
     symbol = context.symbol
     kernel_fn = f"{symbol}_depthwise_conv2d_s8"
+    dot_fn = f"{symbol}_depthwise_conv2d_dot_s8"
     requantize = q31_requantize_name(context)
     clamp = clamp_s8_name(context)
+    dot_signature = f"""int32_t {dot_fn}(
+    const int8_t *input,
+    const int8_t *weight,
+    size_t count,
+    size_t input_stride,
+    size_t weight_stride,
+    int32_t input_zero_point,
+    int32_t accumulator)"""
     return KernelEmission(
         key="depthwise_conv2d_s8_v1",
         header_includes=("<stddef.h>", "<stdint.h>"),
-        declaration=f"""void {kernel_fn}(
+        declaration=f"""{dot_signature};
+
+void {kernel_fn}(
     const int8_t *input,
     const int8_t *weight,
     const int32_t *bias,
@@ -431,7 +495,19 @@ def _depthwise_kernel(context: StepEmitContext) -> KernelEmission:
     int32_t output_zero_point,
     int32_t activation_min,
     int32_t activation_max);""",
-        definition=f"""void {kernel_fn}(
+        definition=f"""{dot_signature} {{
+    size_t input_offset = 0;
+    size_t weight_offset = 0;
+    for (size_t index = 0; index < count; ++index) {{
+        accumulator += ((int32_t)input[input_offset] - input_zero_point)
+            * (int32_t)weight[weight_offset];
+        input_offset += input_stride;
+        weight_offset += weight_stride;
+    }}
+    return accumulator;
+}}
+
+void {kernel_fn}(
     const int8_t *input,
     const int8_t *weight,
     const int32_t *bias,
@@ -457,39 +533,40 @@ def _depthwise_kernel(context: StepEmitContext) -> KernelEmission:
     int32_t output_zero_point,
     int32_t activation_min,
     int32_t activation_max) {{
-    (void)input_channels;
+    const size_t input_row_size = input_width * input_channels;
+    const size_t kernel_row_size = kernel_width * output_channels;
+    const size_t pixel_step = dilation_width * input_channels;
     for (size_t output_y = 0; output_y < output_height; ++output_y) {{
+{_clipped_taps("y", "output_y", "stride_height", "pad_top", 8)}
         for (size_t output_x = 0; output_x < output_width; ++output_x) {{
+{_clipped_taps("x", "output_x", "stride_width", "pad_left", 12)}
+            const size_t valid_x =
+                kernel_x_begin < kernel_x_end ? kernel_x_end - kernel_x_begin : 0u;
+            const size_t first_x = valid_x
+                ? (size_t)(origin_x + (int64_t)(kernel_x_begin * dilation_width)) : 0u;
+            size_t input_channel = 0;
+            size_t multiplier_position = 0;
             for (size_t output_channel = 0; output_channel < output_channels; ++output_channel) {{
-                const size_t input_channel = output_channel / depth_multiplier;
                 int32_t accumulator = bias[output_channel];
-                for (size_t kernel_y = 0; kernel_y < kernel_height; ++kernel_y) {{
-                    const int64_t input_y = (int64_t)output_y * (int64_t)stride_height
-                        + (int64_t)kernel_y * (int64_t)dilation_height - (int64_t)pad_top;
-                    for (size_t kernel_x = 0; kernel_x < kernel_width; ++kernel_x) {{
-                        const int64_t input_x = (int64_t)output_x * (int64_t)stride_width
-                            + (int64_t)kernel_x * (int64_t)dilation_width - (int64_t)pad_left;
-                        int32_t input_value = input_zero_point;
-                        if (input_y >= 0 && input_x >= 0
-                            && (uint64_t)input_y < (uint64_t)input_height
-                            && (uint64_t)input_x < (uint64_t)input_width) {{
-                            const size_t input_index =
-                                ((size_t)input_y * input_width + (size_t)input_x) * input_channels
-                                + input_channel;
-                            input_value = input[input_index];
-                        }}
-                        const size_t weight_index =
-                            (kernel_y * kernel_width + kernel_x) * output_channels + output_channel;
-                        accumulator +=
-                            (input_value - input_zero_point) * (int32_t)weight[weight_index];
-                    }}
+                for (size_t kernel_y = kernel_y_begin; kernel_y < kernel_y_end; ++kernel_y) {{
+                    const size_t input_y =
+                        (size_t)(origin_y + (int64_t)(kernel_y * dilation_height));
+                    accumulator = {dot_fn}(
+                        input + input_y * input_row_size + first_x * input_channels
+                            + input_channel,
+                        weight + kernel_y * kernel_row_size
+                            + kernel_x_begin * output_channels + output_channel,
+                        valid_x, pixel_step, output_channels,
+                        input_zero_point, accumulator);
                 }}
                 const int32_t scaled = {requantize}(
                     accumulator, multiplier[output_channel], shift[output_channel]);
-                const size_t output_index =
-                    (output_y * output_width + output_x) * output_channels + output_channel;
-                output[output_index] = {clamp}(
+                *output++ = {clamp}(
                     (int64_t)scaled + output_zero_point, activation_min, activation_max);
+                if (++multiplier_position == depth_multiplier) {{
+                    multiplier_position = 0;
+                    ++input_channel;
+                }}
             }}
         }}
     }}
