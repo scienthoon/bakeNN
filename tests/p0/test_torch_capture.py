@@ -103,6 +103,14 @@ class TorchExportCaptureTests(unittest.TestCase):
         for constant_name in graph.constants:
             np.testing.assert_array_equal(graph.constants[constant_name], second.constants[constant_name])
 
+    def test_capture_outlives_dynamos_recompile_budget_for_short_lived_modules(self) -> None:
+        example = torch.randn(1, 4)
+        for _ in range(12):
+            # Each module is freed before the next capture. Torch 2.9 then fails
+            # the ninth strict export in one process.
+            graph = capture_torch_export(nn.Sequential(nn.Linear(4, 3), nn.ReLU()).eval(), example)
+            self.assertEqual(tuple(type(op) for op in graph.ops), (FloatLinearOp, FloatReLUOp))
+
     def test_depthwise_residual_mul_relu6_avgpool_and_parameter_buffer_identification(self) -> None:
         class DepthwiseResidual(nn.Module):
             def __init__(self) -> None:

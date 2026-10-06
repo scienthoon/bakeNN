@@ -61,7 +61,12 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 - publish ESP-IDF/Zephyr exports transactionally without overwriting existing
   application files or modifying source artifact trees;
 - preserve measured optimization flags during freestanding builds and reject
-  conflicting build overrides.
+  conflicting build overrides;
+- compile more than eight short-lived PyTorch modules in one process on Torch
+  2.9. That release counts the cache entries of freed modules toward Dynamo's
+  recompile limit, so the ninth `compile_torch_ptq` call failed with
+  `recompile_limit reached`; the capture now retries once from an empty Dynamo
+  cache. Torch 2.10 and later were not affected.
 
 ### Dependencies
 
@@ -73,15 +78,17 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 
 ### Validation
 
-- `scripts/functional_checks.py` runs 19 numbered offline functional tests
-  (`T01` to `T19`) against the frozen MNIST checkpoint (compile, generated file
-  set, determinism, budget and unsupported-operator rejection, byte-exact host
-  run, Python reference agreement, accuracy and memory reports, manifest
-  integrity, frozen evidence, one build of the same generated C for seven Arm
-  cores, Cortex-M4/CMSIS-NN cross-link, ESP-NN selection, and ESP-IDF and
-  Arduino exports) and prints one result line per test; each test runs alone
-  by number, and `tests/test_functional_checks.py` runs the same tests as
-  pytest cases in the framework CI matrix;
+- `scripts/functional_checks.py` runs 210 numbered offline functional tests
+  (`T001` to `T210`), each checking one fact: 35 PyTorch operators and four
+  small networks against the Python reference byte for byte, the ten generated
+  files and the public header, C properties (no heap, no floating point,
+  strict C99 and C11, three optimization levels, sanitizers, guard bytes),
+  the frozen MNIST outputs, accuracy and memory reports, SRAM and Flash
+  budgets, 31 rejection cases, manifest integrity, links for seven Arm cores
+  and RV32IMC, CMSIS-NN and ESP-NN selection, and the ESP-IDF, Zephyr and
+  Arduino exports. Each test runs alone by number or in a range.
+  `tests/test_functional_checks.py` runs the same tests as pytest cases, and a
+  CI job runs the script with `--strict` on Ubuntu with both cross toolchains;
 - compare the pinned ESP-NN 1.2.6 ESP32-S3 scratch mirror with the vendored
   getters compiled for the host, over about 40,000 Conv2D/DepthwiseConv2D
   geometries that reach every getter branch and over every layer of

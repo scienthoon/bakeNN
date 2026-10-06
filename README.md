@@ -674,14 +674,18 @@ The end-to-end test generates C, compiles it with the host C compiler, runs it,
 and compares its outputs byte-for-byte with the independent Python integer
 reference.
 
-The numbered functional tests `T01` to `T19` exercise the main user-visible
-features offline, using only the frozen MNIST checkpoint and images in this
-repository. One command runs all of them and prints one `PASS`/`FAIL` line per
-test; a test number runs that test alone:
+The numbered functional tests `T001` to `T210` each check one user-visible
+fact offline, using only the frozen MNIST checkpoint and images in this
+repository and small models built from fixed seeds: every supported PyTorch
+operator against the reference, the generated files and C properties, reports,
+budgets, rejected inputs, manifest integrity, and the target exports. One
+command runs all of them and prints one `PASS`/`FAIL` line per test; a number
+or a range runs a part:
 
 ```bash
 python scripts/functional_checks.py
-python scripts/functional_checks.py T07
+python scripts/functional_checks.py T084
+python scripts/functional_checks.py T016-T054
 ```
 
 The same tests run as pytest cases:
