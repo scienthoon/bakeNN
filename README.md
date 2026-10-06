@@ -674,12 +674,20 @@ The end-to-end test generates C, compiles it with the host C compiler, runs it,
 and compares its outputs byte-for-byte with the independent Python integer
 reference.
 
-The scripted functional checks exercise the main user-visible features
-offline, using only the frozen MNIST checkpoint and images in this repository.
-They print one `PASS`/`FAIL` line per check:
+The numbered functional tests `T01` to `T19` exercise the main user-visible
+features offline, using only the frozen MNIST checkpoint and images in this
+repository. One command runs all of them and prints one `PASS`/`FAIL` line per
+test; a test number runs that test alone:
 
 ```bash
 python scripts/functional_checks.py
+python scripts/functional_checks.py T07
+```
+
+The same tests run as pytest cases:
+
+```bash
+python -m pytest tests/test_functional_checks.py -v
 ```
 
 CI runs the dependency-light suite on Python 3.10, 3.11, 3.12, and 3.13 with
