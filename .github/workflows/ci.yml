@@ -65,6 +65,7 @@ jobs:
           tests/p3/test_model_zoo_c.py
           tests/p3/test_torch_extended.py
           tests/test_frontend_audit.py
+          tests/test_functional_checks.py
           tests/test_ptq_defensive_audit.py
         env:
           CC: gcc

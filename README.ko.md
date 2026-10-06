@@ -698,6 +698,14 @@ PYTHONPATH=src python -m pytest -q
 엔드투엔드 테스트는 C를 생성하고, 호스트 C 컴파일러로 컴파일해 실행한
 뒤, 독립적인 Python 정수 참조와 출력을 바이트 단위로 비교합니다.
 
+스크립트로 된 기능 점검은 이 레포에 들어 있는 고정 MNIST 체크포인트와
+이미지만으로 주요 사용자 기능을 오프라인에서 실행합니다. 점검마다
+`PASS`/`FAIL` 한 줄을 출력합니다.
+
+```bash
+python scripts/functional_checks.py
+```
+
 CI는 Python 3.10, 3.11, 3.12, 3.13과 GCC 및 Clang 조합으로 의존성이
 적은 테스트 스위트를 실행합니다. 프레임워크 행렬은 추가로 Python
 3.10에서 Torch 2.9/torchvision 0.24, Python 3.12에서 Torch
