@@ -73,12 +73,12 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 
 ### Validation
 
-- `scripts/functional_checks.py` runs 13 offline functional checks against the
+- `scripts/functional_checks.py` runs 14 offline functional checks against the
   frozen MNIST checkpoint (compile, byte-exact host run, accuracy and memory
   reports, budget and unsupported-operator rejection, Cortex-M4/CMSIS-NN
   cross-link, ESP-IDF and Arduino exports, manifest integrity, determinism,
-  frozen evidence) and prints one result line per check; the framework CI
-  matrix runs it;
+  frozen evidence, and one build of the same generated C for seven Arm cores)
+  and prints one result line per check; the framework CI matrix runs it;
 - compare the pinned ESP-NN 1.2.6 ESP32-S3 scratch mirror with the vendored
   getters compiled for the host, over about 40,000 Conv2D/DepthwiseConv2D
   geometries that reach every getter branch and over every layer of

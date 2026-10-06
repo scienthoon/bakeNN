@@ -39,6 +39,10 @@ from run_mnist import MNISTNet, quantize_mnist_corpus  # noqa: E402
 
 EVIDENCE = REPOSITORY / "examples/mnist/evidence"
 STRICT_C = ("-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-pedantic")
+# Unrelated Arm cores, from ARMv6-M without hardware divide to ARMv8.1-M.
+ARM_CORES = (
+    "cortex-m0plus", "cortex-m3", "cortex-m4", "cortex-m7", "cortex-m33", "cortex-m55", "cortex-m85",
+)
 
 
 class Skip(Exception):
@@ -381,6 +385,53 @@ def check_frozen_evidence(session: Session) -> str:
     return "frozen_generated_c=verified mismatched_output_bytes=0"
 
 
+def check_any_cpu(session: Session) -> str:
+    """The default output is plain C, not code for one chip family."""
+
+    artifacts = session.compiled.artifacts
+    kernels = {item.kernel_id for item in artifacts.backend_plan.selections}
+    _expect(all(kernel.startswith("portable.") for kernel in kernels), f"non-portable kernels: {kernels}")
+    for source in (artifacts.model_source, artifacts.weights_source, artifacts.kernels_source):
+        subprocess.run(
+            [
+                session.compiler, "-std=c99", "-pedantic-errors", "-Wall", "-Wextra", "-Werror",
+                "-fsyntax-only", "-I", str(artifacts.output_dir), str(source),
+            ],
+            check=True,
+        )
+    _require("arm-none-eabi-gcc")
+    sources: set[str] = set()
+    for cpu in ARM_CORES:
+        target = bakenn.TargetDescriptor(
+            target_id=f"any-{cpu}",
+            architecture=bakenn.TargetArchitecture.ARM,
+            cpu=cpu,
+            abi="aapcs32-soft",
+            toolchain="arm-none-eabi",
+            features=frozenset({"scalar-int8", "thumb"}),
+            arena_alignment=8,
+            constant_alignment=4,
+            compiler_flags=(f"-mcpu={cpu}", "-mthumb", "-mfloat-abi=soft"),
+        )
+        # Only the backend depends on the target, so reuse the quantized graph.
+        built = bakenn.compile(
+            session.compiled.graph, session.output / f"any_cpu/{cpu}", target=target
+        ).artifacts
+        report = bakenn.build_freestanding_elf(built, target, session.output / f"any_cpu/{cpu}_elf")
+        _expect(not report.undefined_symbols, f"{cpu}: undefined symbols {report.undefined_symbols}")
+        _expect(not report.forbidden_symbols, f"{cpu}: heap or float symbols {report.forbidden_symbols}")
+        sources.add(
+            hashlib.sha256(
+                b"".join(
+                    path.read_bytes()
+                    for path in (built.header, built.model_source, built.weights_source, built.kernels_source)
+                )
+            ).hexdigest()
+        )
+    _expect(len(sources) == 1, "the generated C differs between cores")
+    return f"strict_c99=ok arm_cores_linked={len(ARM_CORES)}/{len(ARM_CORES)} identical_c_for_all_cores=1"
+
+
 CHECKS = (
     Check("F01", "import the package and report versions", check_install),
     Check("F02", "compile a PyTorch FP32 model to heap-free INT8 C", check_compile),
@@ -395,6 +446,7 @@ CHECKS = (
     Check("F11", "detect a modified artifact through the manifest", check_manifest),
     Check("F12", "produce identical artifacts for identical inputs", check_deterministic),
     Check("F13", "re-verify the frozen MNIST evidence", check_frozen_evidence),
+    Check("F14", "build the same generated C for unrelated CPU cores", check_any_cpu),
 )
 
 
