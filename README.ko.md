@@ -698,14 +698,18 @@ PYTHONPATH=src python -m pytest -q
 엔드투엔드 테스트는 C를 생성하고, 호스트 C 컴파일러로 컴파일해 실행한
 뒤, 독립적인 Python 정수 참조와 출력을 바이트 단위로 비교합니다.
 
-번호가 붙은 기능 테스트 `T01`부터 `T19`는 이 레포에 들어 있는 고정 MNIST
-체크포인트와 이미지만으로 주요 사용자 기능을 오프라인에서 실행합니다.
-명령 한 번으로 전부 실행되며 테스트마다 `PASS`/`FAIL` 한 줄을 출력합니다.
-테스트 번호를 주면 그 테스트만 실행합니다.
+번호가 붙은 기능 테스트 `T001`부터 `T210`은 각각 사용자가 볼 수 있는
+사실 하나를 오프라인에서 확인합니다. 이 레포에 들어 있는 고정 MNIST
+체크포인트와 이미지, 그리고 고정된 시드로 만든 작은 모델만 사용합니다.
+지원하는 PyTorch 연산별 참조 일치, 생성 파일과 C 코드의 성질, 리포트,
+예산, 거부되는 입력, 매니페스트 무결성, 타깃 내보내기를 다룹니다. 명령 한
+번으로 전부 실행되며 테스트마다 `PASS`/`FAIL` 한 줄을 출력합니다. 번호나
+범위를 주면 그 부분만 실행합니다.
 
 ```bash
 python scripts/functional_checks.py
-python scripts/functional_checks.py T07
+python scripts/functional_checks.py T084
+python scripts/functional_checks.py T016-T054
 ```
 
 같은 테스트를 pytest 케이스로도 실행할 수 있습니다.
