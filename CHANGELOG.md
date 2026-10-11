@@ -61,7 +61,12 @@ its public API stabilizes; pre-1.0 releases may still contain breaking changes.
 - publish ESP-IDF/Zephyr exports transactionally without overwriting existing
   application files or modifying source artifact trees;
 - preserve measured optimization flags during freestanding builds and reject
-  conflicting build overrides.
+  conflicting build overrides;
+- compile more than eight short-lived PyTorch modules in one process on Torch
+  2.9. That release counts the cache entries of freed modules toward Dynamo's
+  recompile limit, so the ninth `compile_torch_ptq` call failed with
+  `recompile_limit reached`; the capture now retries once from an empty Dynamo
+  cache. Torch 2.10 and later were not affected.
 
 ### Dependencies
 

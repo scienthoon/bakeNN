@@ -1183,6 +1183,26 @@ def _extract_op(node: Any, values: dict[str, FloatValue], constants: dict[str, n
     raise AssertionError(f"unhandled allowlisted operator {target}")
 
 
+def _export_static(torch: Any, model: object, args: tuple[object, ...]) -> Any:
+    """Run strict ``torch.export``, once more from an empty Dynamo cache if needed."""
+
+    def export() -> Any:
+        with torch.no_grad():
+            return torch.export.export(model, args, strict=True)
+
+    try:
+        return export()
+    except Exception as error:
+        limit_hit = getattr(torch._dynamo.exc, "FailOnRecompileLimitHit", ())
+        if not isinstance(error, limit_hit):
+            raise
+    # Torch 2.9 counts the cache entries of modules that are already freed
+    # toward Dynamo's recompile limit, so the ninth capture of short-lived
+    # modules in one process fails. An empty cache is what a new process has.
+    torch._dynamo.reset()
+    return export()
+
+
 def capture_torch_export(
     model: object,
     example_input: object,
@@ -1224,8 +1244,7 @@ def capture_torch_export(
     if not bool(torch.isfinite(input_tensor).all().item()):
         raise CompileError("example input contains NaN or infinity")
     try:
-        with torch.no_grad():
-            exported = torch.export.export(model, args, strict=True)
+        exported = _export_static(torch, model, args)
     except Exception as error:
         raise CompileError(f"torch.export capture failed: {error}") from error
     mutation_outputs = [
